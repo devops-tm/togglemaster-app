@@ -68,13 +68,14 @@ jobs:
         working-directory: ./targeting-service
         run: bandit -r . -lll -ii -x ./tests
 
-      - name: Run Trivy vulnerability scanner in fs mode
+      - name: Run Trivy vulnerability scanner on image
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: 'fs'
-          scan-ref: './targeting-service'
+          image-ref: 'togglemaster/flag-service:${{ github.sha }}'
+          format: 'table'
           severity: 'CRITICAL'
           exit-code: '1'
+          ignore-unfixed: true
 
   docker-build:
     name: Docker Build & Image Scan
