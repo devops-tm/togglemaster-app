@@ -130,12 +130,10 @@ O acesso dos clientes ocorre através do **NGINX Ingress Controller**, publicado
      (5432)           (6379)        (HTTPS 443)
 ```
 
-### Projeto realizado por
+# Evolução
 
-| Nome |
-| :--- |
-| Alexander Auerhahn
-| Alison Isidro
-| Cristian Gadelha
-| Rodrigo Reis
-| Tiago Martins
+- Stack Baseada em Plataforma
+- Linter e SAST: SonarCloud
+- SCA e Container Scan: Trivy
+- Vantagens: Fornece um dashboard web interativo para gerenciar a dívida técnica, acompanhar o histórico de cobertura e visualizar as falhas de segurança de forma centralizada.
+- Desvantagens: Requer a criação de uma conta no SonarCloud e a configuração de tokens de integração nos repositórios. O pipeline sofre um acréscimo no tempo total de execução devido à comunicação com a API da plataforma.
