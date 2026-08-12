@@ -1,14 +1,14 @@
-name: Flag Service CI
+name: Targeting Service CI
 
 on:
   push:
     branches: [ main ]
-  #   paths:
-  #     - 'flag-service/**'
-  # pull_request:
-  #   branches: [ main ]
-  #   paths:
-  #     - 'flag-service/**'
+    paths:
+      - 'targeting-service/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'targeting-service/**'
 
 jobs:
   build-and-test:
@@ -25,7 +25,7 @@ jobs:
           cache: 'pip'
 
       - name: Install dependencies
-        working-directory: ./flag-service
+        working-directory: ./targeting-service
         run: |
           pip install --no-cache-dir -r requirements.txt
 
@@ -45,7 +45,7 @@ jobs:
         run: pip install flake8
 
       - name: Run Flake8
-        working-directory: ./flag-service
+        working-directory: ./targeting-service
         run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 
   security-scan:
@@ -65,14 +65,14 @@ jobs:
         run: pip install bandit
 
       - name: Run Bandit Security Scanner
-        working-directory: ./flag-service
+        working-directory: ./targeting-service
         run: bandit -r . -lll -ii -x ./tests
 
       - name: Run Trivy vulnerability scanner in fs mode
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
-          scan-ref: './flag-service'
+          scan-ref: './targeting-service'
           severity: 'CRITICAL'
           exit-code: '1'
 
@@ -85,14 +85,14 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build an image from Dockerfile
-        working-directory: ./flag-service
+        working-directory: ./targeting-service
         run: |
-          docker build -t togglemaster/flag-service:${{ github.sha }} .
+          docker build -t togglemaster/targeting-service:${{ github.sha }} .
 
       - name: Run Trivy vulnerability scanner on image
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: 'togglemaster/flag-service:${{ github.sha }}'
+          image-ref: 'togglemaster/targeting-service:${{ github.sha }}'
           format: 'table'
           severity: 'CRITICAL'
           exit-code: '1'

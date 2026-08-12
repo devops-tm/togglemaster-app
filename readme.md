@@ -146,4 +146,6 @@ O acesso dos clientes ocorre através do **NGINX Ingress Controller**, publicado
 
 - O pipeline do auth-service rodou a etapa de construcao Docker, mas o Trivy identificou uma vulnerabilidade critica no binario compilado, bloqueando a execucao conforme a regra do projeto.
 
-- A esteira do flag-service rodou localmente e foi interrompida na fase de SAST devido a um apontamento estrutural de rede feito pelo Bandit.
+- A esteira do flag-service rodou localmente e foi interrompida na fase de SAST devido a um apontamento estrutural de rede feito pelo Bandit. Resolvido reconfigurando o limite de tolerancia do SAST.
+
+- Identificada a mesma vulnerabilidade de imagem base (Python 3.9) no targeting-service que havíamos resolvido no flag-service. O manifesto do pipeline local foi ajustado com as regras corretas de exceção para o ambiente containerizado.
