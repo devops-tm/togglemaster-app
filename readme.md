@@ -137,3 +137,11 @@ O acesso dos clientes ocorre através do **NGINX Ingress Controller**, publicado
 - SCA e Container Scan: Trivy
 - Vantagens: Fornece um dashboard web interativo para gerenciar a dívida técnica, acompanhar o histórico de cobertura e visualizar as falhas de segurança de forma centralizada.
 - Desvantagens: Requer a criação de uma conta no SonarCloud e a configuração de tokens de integração nos repositórios. O pipeline sofre um acréscimo no tempo total de execução devido à comunicação com a API da plataforma.
+
+# Desafios enfrentados
+
+- Decisão de utilização de SaaS Github Actions ou self-hosted CI com Jenkins
+
+- Código do auth-service/handlers.go identificado a necessidade de tratamento de log para as funções Encode que estavam gerando a quebra na esteira de integração contínua.
+
+- O pipeline do auth-service rodou a etapa de construcao Docker, mas o Trivy identificou uma vulnerabilidade critica no binario compilado, bloqueando a execucao conforme a regra do projeto.
