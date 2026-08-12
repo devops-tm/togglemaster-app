@@ -3,12 +3,12 @@ name: Flag Service CI
 on:
   push:
     branches: [ main ]
-  #   paths:
-  #     - 'flag-service/**'
-  # pull_request:
-  #   branches: [ main ]
-  #   paths:
-  #     - 'flag-service/**'
+    paths:
+      - 'flag-service/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'flag-service/**'
 
 jobs:
   build-and-test:
