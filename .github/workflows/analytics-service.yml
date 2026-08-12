@@ -1,14 +1,14 @@
-name: Targeting Service CI
+name: Analytics Service CI
 
 on:
   push:
     branches: [ main ]
     paths:
-      - 'targeting-service/**'
+      - 'analytics-service/**'
   pull_request:
     branches: [ main ]
     paths:
-      - 'targeting-service/**'
+      - 'analytics-service/**'
 
 jobs:
   build-and-test:
@@ -21,11 +21,11 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version-file: 'targeting-service/.python-version'
+          python-version-file: 'analytics-service/.python-version'
           cache: 'pip'
 
       - name: Install dependencies
-        working-directory: ./targeting-service
+        working-directory: ./analytics-service
         run: |
           pip install --no-cache-dir -r requirements.txt
 
@@ -39,13 +39,13 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version-file: 'targeting-service/.python-version'
+          python-version-file: 'analytics-service/.python-version'
 
       - name: Install Flake8
         run: pip install flake8
 
       - name: Run Flake8
-        working-directory: ./targeting-service
+        working-directory: ./analytics-service
         run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 
   security-scan:
@@ -59,20 +59,20 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version-file: 'targeting-service/.python-version'
+          python-version-file: 'analytics-service/.python-version'
 
       - name: Install Bandit for SAST
         run: pip install bandit
 
       - name: Run Bandit Security Scanner
-        working-directory: ./targeting-service
+        working-directory: ./analytics-service
         run: bandit -r . -lll -ii -x ./tests
 
       - name: Run Trivy vulnerability scanner in fs mode
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
-          scan-ref: './targeting-service'
+          scan-ref: './analytics-service'
           severity: 'CRITICAL'
           exit-code: '1'
           ignore-unfixed: true
@@ -86,19 +86,19 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build an image from Dockerfile
-        working-directory: ./flag-service # (ou targeting-service conforme o arquivo)
+        working-directory: ./analytics-service
         run: |
-          docker build -t togglemaster/flag-service:${{ github.sha }} .
-          docker save togglemaster/flag-service:${{ github.sha }} -o /tmp/flag-service.tar
+          docker build -t togglemaster/analytics-service:${{ github.sha }} .
+          docker save togglemaster/analytics-service:${{ github.sha }} -o /tmp/analytics-service.tar
 
       - name: Load image for Trivy
         run: |
-          docker load -i /tmp/flag-service.tar
+          docker load -i /tmp/analytics-service.tar
 
       - name: Run Trivy vulnerability scanner on image
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: 'togglemaster/flag-service:${{ github.sha }}'
+          image-ref: 'togglemaster/analytics-service:${{ github.sha }}'
           format: 'table'
           severity: 'CRITICAL'
           exit-code: '1'
