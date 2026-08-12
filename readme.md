@@ -145,3 +145,5 @@ O acesso dos clientes ocorre através do **NGINX Ingress Controller**, publicado
 - Código do auth-service/handlers.go identificado a necessidade de tratamento de log para as funções Encode que estavam gerando a quebra na esteira de integração contínua.
 
 - O pipeline do auth-service rodou a etapa de construcao Docker, mas o Trivy identificou uma vulnerabilidade critica no binario compilado, bloqueando a execucao conforme a regra do projeto.
+
+- A esteira do flag-service rodou localmente e foi interrompida na fase de SAST devido a um apontamento estrutural de rede feito pelo Bandit.
