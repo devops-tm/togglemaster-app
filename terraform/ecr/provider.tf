@@ -1,7 +1,7 @@
 terraform {
   backend "s3" {
     bucket = "nome-do-seu-bucket"
-    key    = "networking/terraform.tfstate"
+    key    = "ecr/terraform.tfstate"
     region = "sua-regiao-aqui"
   }
   required_providers {

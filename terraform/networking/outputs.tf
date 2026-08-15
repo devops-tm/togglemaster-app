@@ -1,13 +1,5 @@
-output "auth_security_group" {
-  value = data.aws_db_instance.auth.vpc_security_groups[0]
-}
-
-output "flag_security_group" {
-  value = data.aws_db_instance.flag.vpc_security_groups[0]
-}
-
-output "targeting_security_group" {
-  value = data.aws_db_instance.targeting.vpc_security_groups[0]
+output "rds_security_groups" {
+  value = { for k, v in data.aws_db_instance.databases : k => v.vpc_security_groups[0] }
 }
 
 output "redis_security_group" {

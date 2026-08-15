@@ -1,65 +1,9 @@
-provider "aws" {
-  region = "us-east-1"
-}
-
-#############################
-# Variables
-#############################
-
-variable "db_username" {
-  description = "Usuário administrador do PostgreSQL"
-  type        = string
-  sensitive   = true
-}
-
-variable "db_password" {
-  description = "Senha do PostgreSQL"
-  type        = string
-  sensitive   = true
-}
-
-#############################
-# Databases
-#############################
-
-locals {
-
-  databases = {
-
-    auth = {
-      identifier = "rds-postgres-auth"
-      db_name    = "auth_db"
-    }
-
-    flag = {
-      identifier = "rds-postgres-flag"
-      db_name    = "flags_db"
-    }
-
-    targeting = {
-      identifier = "rds-postgres-targeting"
-      db_name    = "targeting_db"
-    }
-
-  }
-
-}
-
-####################################
-# VPC
-####################################
-
 data "aws_vpc" "default" {
   default = true
 }
 
-####################################
-# Security Groups
-####################################
-
 resource "aws_security_group" "postgres" {
-
-  for_each = local.databases
+  for_each = var.databases
 
   name        = "${each.key}-postgres-sg"
   description = "Security Group do banco ${each.key}"
@@ -78,16 +22,10 @@ resource "aws_security_group" "postgres" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
 }
 
-#############################
-# RDS PostgreSQL
-#############################
-
 resource "aws_db_instance" "postgres" {
-
-  for_each = local.databases
+  for_each = var.databases
 
   identifier = each.value.identifier
 
@@ -121,41 +59,12 @@ resource "aws_db_instance" "postgres" {
   copy_tags_to_snapshot = false
 
   vpc_security_group_ids = [
-  aws_security_group.postgres[each.key].id
-]
+    aws_security_group.postgres[each.key].id
+  ]
 
   tags = {
     Project     = "ToggleMaster"
     Environment = "AWSAcademy"
     Service     = each.key
   }
-
-}
-
-#############################
-# Outputs
-#############################
-
-output "rds_auth_endpoint" {
-  value = aws_db_instance.postgres["auth"].endpoint
-}
-
-output "rds_flag_endpoint" {
-  value = aws_db_instance.postgres["flag"].endpoint
-}
-
-output "rds_targeting_endpoint" {
-  value = aws_db_instance.postgres["targeting"].endpoint
-}
-
-output "rds_auth_database" {
-  value = aws_db_instance.postgres["auth"].db_name
-}
-
-output "rds_flag_database" {
-  value = aws_db_instance.postgres["flag"].db_name
-}
-
-output "rds_targeting_database" {
-  value = aws_db_instance.postgres["targeting"].db_name
 }

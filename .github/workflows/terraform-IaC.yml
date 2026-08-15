@@ -1,0 +1,171 @@
+name: "Terraform - Provisioning & Management"
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Ação do Terraform a ser executada"
+        required: true
+        default: "apply"
+        type: choice
+        options:
+          - apply
+          - destroy
+
+permissions:
+  contents: read
+
+jobs:
+  terraform:
+    name: "Execute Terraform (${{ github.event.inputs.action }})"
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
+      TF_VAR_aws_region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+      BUCKET_STATE: ${{ secrets.TERRAFORM_STATE_BUCKET }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.0
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Bootstrap S3 Backend Bucket
+        run: |
+          if [ -z "$BUCKET_STATE" ]; then
+            echo "Erro: O segredo TERRAFORM_STATE_BUCKET precisa estar preenchido no repositório."
+            exit 1
+          fi
+          
+          echo "Verificando se o bucket $BUCKET_STATE existe..."
+          if ! aws s3api head-bucket --bucket "$BUCKET_STATE" 2>/dev/null; then
+            echo "Bucket não encontrado. Provisionando bucket $BUCKET_STATE..."
+            if [ "$AWS_REGION" = "us-east-1" ]; then
+              aws s3 mb "s3://$BUCKET_STATE"
+            else
+              aws s3 mb "s3://$BUCKET_STATE" --region "$AWS_REGION" --create-bucket-configuration LocationConstraint="$AWS_REGION"
+            fi
+            echo "Bucket provisionado com sucesso."
+          else
+            echo "Bucket $BUCKET_STATE já existe e está acessível."
+          fi
+
+      - name: Generate Dynamic tfvars
+        run: |
+          # ECR vars
+          cat <<EOF > terraform/ecr/secrets.auto.tfvars
+          ecr_repositories = [
+            "auth-service",
+            "flag-service",
+            "targeting-service",
+            "evaluation-service",
+            "analytics-service"
+          ]
+          EOF
+
+          # Serverless vars
+          cat <<EOF > terraform/serverless/secrets.auto.tfvars
+          sqs_queue_name      = "togglemaster-evaluation-events"
+          dynamodb_table_name = "ToggleMasterAnalytics"
+          EOF
+
+          # RDS vars
+          cat <<EOF > terraform/rds/secrets.auto.tfvars
+          db_username = "${{ secrets.POSTGRES_USER }}"
+          db_password = "${{ secrets.POSTGRES_PASSWORD }}"
+          databases = {
+            auth      = { identifier = "rds-postgres-auth", db_name = "auth_db" }
+            flag      = { identifier = "rds-postgres-flag", db_name = "flags_db" }
+            targeting = { identifier = "rds-postgres-targeting", db_name = "targeting_db" }
+          }
+          EOF
+
+          # ElastiCache vars
+          cat <<EOF > terraform/elasticache/secrets.auto.tfvars
+          cluster_id = "togglemaster-redis"
+          node_type  = "cache.t3.micro"
+          redis_port = 6379
+          EOF
+
+      - name: Run ECR
+        run: |
+          cd terraform/ecr
+          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION"
+          if [ "${{ github.event.inputs.action }}" = "apply" ]; then
+            terraform apply -auto-approve
+          else
+            terraform destroy -auto-approve
+          fi
+
+      - name: Run Serverless
+        run: |
+          cd terraform/serverless
+          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION"
+          if [ "${{ github.event.inputs.action }}" = "apply" ]; then
+            terraform apply -auto-approve
+          else
+            terraform destroy -auto-approve
+          fi
+
+      - name: Run RDS
+        run: |
+          cd terraform/rds
+          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION"
+          if [ "${{ github.event.inputs.action }}" = "apply" ]; then
+            terraform apply -auto-approve
+          else
+            terraform destroy -auto-approve
+          fi
+
+      - name: Run ElastiCache
+        run: |
+          cd terraform/elasticache
+          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION"
+          if [ "${{ github.event.inputs.action }}" = "apply" ]; then
+            terraform apply -auto-approve
+          else
+            terraform destroy -auto-approve
+          fi
+
+      - name: Run EKS
+        run: |
+          cd terraform/eks
+          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION"
+          if [ "${{ github.event.inputs.action }}" = "apply" ]; then
+            terraform apply -auto-approve
+          else
+            terraform destroy -auto-approve
+          fi
+
+      - name: Run Networking (Only on Apply)
+        if: ${{ github.event.inputs.action == 'apply' }}
+        run: |
+          # Obter o SG dos nodes do EKS criado
+          cd terraform/eks
+          EKS_SG=$(terraform output -raw cluster_primary_security_group_id)
+          cd ../..
+
+          cat <<EOF > terraform/networking/secrets.auto.tfvars
+          eks_node_security_group = "$EKS_SG"
+          rds_instances           = ["rds-postgres-auth", "rds-postgres-flag", "rds-postgres-targeting"]
+          redis_cluster_id        = "togglemaster-redis"
+          EOF
+
+          cd terraform/networking
+          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION"
+          terraform apply -auto-approve
