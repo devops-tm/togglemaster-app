@@ -155,3 +155,7 @@ O acesso dos clientes ocorre através do **NGINX Ingress Controller**, publicado
 - Diagnostico de vulnerabilidades OS-level sem patch disponivel e atualizacao do Dockerfile do evaluation-service.
 
 - O codigo IaC existente para ECR, SQS e DynamoDB foi analisado e os pontos de melhoria foram mapeados com base na arquitetura modular.
+
+- Os fluxos de CI locais foram concluídos e a estrutura modular de IaC via Terraform foi definida seguindo as restrições da AWS Academy.
+
+- uso de pipeline multistage paralelo para otimizacao de tempo.

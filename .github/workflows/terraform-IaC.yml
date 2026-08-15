@@ -1,12 +1,12 @@
-name: "Terraform - Provisioning & Management"
+name: Terraform - Provisioning Management
 
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: "Ação do Terraform a ser executada"
+        description: Acao do Terraform a ser executada
         required: true
-        default: "apply"
+        default: apply
         type: choice
         options:
           - apply
@@ -15,157 +15,144 @@ on:
 permissions:
   contents: read
 
+env:
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+  AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
+  TF_VAR_aws_region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+  BUCKET_STATE: ${{ secrets.TERRAFORM_STATE_BUCKET }}
+
 jobs:
-  terraform:
-    name: "Execute Terraform (${{ github.event.inputs.action }})"
+  setup:
+    name: Setup Backend S3
     runs-on: ubuntu-latest
-
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
-      AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
-      TF_VAR_aws_region: ${{ secrets.AWS_REGION || 'us-east-1' }}
-      BUCKET_STATE: ${{ secrets.TERRAFORM_STATE_BUCKET }}
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.8.0
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
-
-      - name: Bootstrap S3 Backend Bucket
-        run: |
-          if [ -z "$BUCKET_STATE" ]; then
-            echo "Erro: O segredo TERRAFORM_STATE_BUCKET precisa estar preenchido no repositório."
-            exit 1
-          fi
-          
-          echo "Verificando se o bucket $BUCKET_STATE existe..."
+      - run: |
           if ! aws s3api head-bucket --bucket "$BUCKET_STATE" 2>/dev/null; then
-            echo "Bucket não encontrado. Provisionando bucket $BUCKET_STATE..."
-            if [ "$AWS_REGION" = "us-east-1" ]; then
-              aws s3 mb "s3://$BUCKET_STATE"
-            else
-              aws s3 mb "s3://$BUCKET_STATE" --region "$AWS_REGION" --create-bucket-configuration LocationConstraint="$AWS_REGION"
-            fi
-            echo "Bucket provisionado com sucesso."
-          else
-            echo "Bucket $BUCKET_STATE já existe e está acessível."
+            aws s3 mb "s3://$BUCKET_STATE" --region "$AWS_REGION"
           fi
 
-      - name: Generate Dynamic tfvars
-        run: |
-          # ECR vars
+  base_infra:
+    name: ECR and Serverless
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - run: |
           cat <<EOF > terraform/ecr/secrets.auto.tfvars
-          ecr_repositories = [
-            "auth-service",
-            "flag-service",
-            "targeting-service",
-            "evaluation-service",
-            "analytics-service"
-          ]
+          ecr_repositories = ["auth-service", "flag-service", "targeting-service", "evaluation-service", "analytics-service"]
           EOF
-
-          # Serverless vars
+          cd terraform/ecr
+          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION"
+          terraform ${{ github.event.inputs.action }} -auto-approve
+      - run: |
           cat <<EOF > terraform/serverless/secrets.auto.tfvars
           sqs_queue_name      = "togglemaster-evaluation-events"
           dynamodb_table_name = "ToggleMasterAnalytics"
           EOF
+          cd terraform/serverless
+          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION"
+          terraform ${{ github.event.inputs.action }} -auto-approve
 
-          # RDS vars
+  data_infra:
+    name: RDS and ElastiCache
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - run: |
+          CLEAN_PASS=$(echo -n "${{ secrets.POSTGRES_PASSWORD }}" | tr -d '\n\r')
           cat <<EOF > terraform/rds/secrets.auto.tfvars
           db_username = "${{ secrets.POSTGRES_USER }}"
-          db_password = "${{ secrets.POSTGRES_PASSWORD }}"
+          db_password = "${CLEAN_PASS}"
           databases = {
             auth      = { identifier = "rds-postgres-auth", db_name = "auth_db" }
             flag      = { identifier = "rds-postgres-flag", db_name = "flags_db" }
             targeting = { identifier = "rds-postgres-targeting", db_name = "targeting_db" }
           }
           EOF
-
-          # ElastiCache vars
+          cd terraform/rds
+          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION"
+          terraform ${{ github.event.inputs.action }} -auto-approve
+      - run: |
           cat <<EOF > terraform/elasticache/secrets.auto.tfvars
           cluster_id = "togglemaster-redis"
           node_type  = "cache.t3.micro"
           redis_port = 6379
           EOF
-
-      - name: Run ECR
-        run: |
-          cd terraform/ecr
-          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION"
-          if [ "${{ github.event.inputs.action }}" = "apply" ]; then
-            terraform apply -auto-approve
-          else
-            terraform destroy -auto-approve
-          fi
-
-      - name: Run Serverless
-        run: |
-          cd terraform/serverless
-          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION"
-          if [ "${{ github.event.inputs.action }}" = "apply" ]; then
-            terraform apply -auto-approve
-          else
-            terraform destroy -auto-approve
-          fi
-
-      - name: Run RDS
-        run: |
-          cd terraform/rds
-          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION"
-          if [ "${{ github.event.inputs.action }}" = "apply" ]; then
-            terraform apply -auto-approve
-          else
-            terraform destroy -auto-approve
-          fi
-
-      - name: Run ElastiCache
-        run: |
           cd terraform/elasticache
           terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION"
-          if [ "${{ github.event.inputs.action }}" = "apply" ]; then
-            terraform apply -auto-approve
-          else
-            terraform destroy -auto-approve
-          fi
+          terraform ${{ github.event.inputs.action }} -auto-approve
 
-      - name: Run EKS
-        run: |
+  compute_infra:
+    name: EKS Cluster
+    needs: setup
+    runs-on: ubuntu-latest
+    outputs:
+      eks_sg_id: ${{ steps.export_sg.outputs.EKS_SG }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - run: |
           cd terraform/eks
           terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION"
-          if [ "${{ github.event.inputs.action }}" = "apply" ]; then
-            terraform apply -auto-approve
-          else
-            terraform destroy -auto-approve
-          fi
-
-      - name: Run Networking (Only on Apply)
+          terraform ${{ github.event.inputs.action }} -auto-approve
+      - id: export_sg
         if: ${{ github.event.inputs.action == 'apply' }}
         run: |
-          # Obter o SG dos nodes do EKS criado
           cd terraform/eks
-          EKS_SG=$(terraform output -raw cluster_primary_security_group_id)
-          cd ../..
+          SG=$(terraform output -raw cluster_primary_security_group_id)
+          echo "EKS_SG=$SG" >> $GITHUB_OUTPUT
 
+  networking_infra:
+    name: Networking Integrations
+    needs: [data_infra, compute_infra]
+    if: ${{ github.event.inputs.action == 'apply' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - env:
+          EKS_SG: ${{ needs.compute_infra.outputs.eks_sg_id }}
+        run: |
           cat <<EOF > terraform/networking/secrets.auto.tfvars
           eks_node_security_group = "$EKS_SG"
           rds_instances           = ["rds-postgres-auth", "rds-postgres-flag", "rds-postgres-targeting"]
           redis_cluster_id        = "togglemaster-redis"
           EOF
-
           cd terraform/networking
           terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION"
           terraform apply -auto-approve
