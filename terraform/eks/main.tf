@@ -36,7 +36,7 @@ resource "aws_eks_cluster" "eks" {
   }
 
   access_config {
-    authentication_mode                         = "API"
+    authentication_mode                         = "API_AND_CONFIG_MAP"
     bootstrap_cluster_creator_admin_permissions = true
   }
 
@@ -53,7 +53,7 @@ resource "aws_eks_node_group" "nodes" {
   subnet_ids      = local.valid_subnets
 
   capacity_type  = "ON_DEMAND"
-  ami_type       = "AL2023_x86_64"
+  ami_type       = "AL2023_x86_64_STANDARD"
   disk_size      = 20
   instance_types = var.instance_types
 

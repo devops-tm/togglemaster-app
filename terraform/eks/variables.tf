@@ -1,46 +1,46 @@
 variable "aws_region" {
-  description = "Região da AWS onde o cluster será provisionado"
+  description = "Regiao da AWS onde o cluster sera provisionado"
   type        = string
 }
 
 variable "cluster_name" {
   description = "Nome do cluster EKS"
   type        = string
-  default     = "togglemaster-cluster"
+  default     = "togglemaster-eks"
 }
 
 variable "cluster_version" {
-  description = "Versão do Kubernetes"
+  description = "Versao do Kubernetes"
   type        = string
-  default     = "1.30"
+  default     = "1.36"
 }
 
 variable "node_group_name" {
   description = "Nome do Node Group"
   type        = string
-  default     = "togglemaster-nodegroup"
+  default     = "togglemaster-ng"
 }
 
 variable "instance_types" {
-  description = "Tipos de instância para os worker nodes"
+  description = "Tipos de instancia para os worker nodes"
   type        = list(string)
   default     = ["t3.medium"]
 }
 
 variable "desired_size" {
-  description = "Quantidade desejada de instâncias nos nós"
+  description = "Quantidade desejada de instancias nos nos"
   type        = number
   default     = 2
 }
 
 variable "min_size" {
-  description = "Quantidade mínima de instâncias"
+  description = "Quantidade minima de instancias"
   type        = number
   default     = 1
 }
 
 variable "max_size" {
-  description = "Quantidade máxima de instâncias"
+  description = "Quantidade maxima de instancias"
   type        = number
   default     = 4
 }

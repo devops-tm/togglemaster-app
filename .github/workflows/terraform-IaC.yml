@@ -1,4 +1,4 @@
-name: Terraform - Provisioning Management
+name: Terraform Managment
 
 on:
   workflow_dispatch:
