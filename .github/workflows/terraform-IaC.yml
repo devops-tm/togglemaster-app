@@ -69,7 +69,7 @@ jobs:
           terraform ${{ github.event.inputs.action }} -auto-approve
 
   data_infra:
-    name: RDS and ElastiCache
+    name: RDS, ElastiCache e Secrets
     needs: setup
     runs-on: ubuntu-latest
     steps:
@@ -81,11 +81,16 @@ jobs:
           aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
+          
+      - name: Deploy Secrets Manager
+        run: |
+          cd terraform/secrets
+          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION"
+          terraform ${{ github.event.inputs.action }} -auto-approve
+
       - run: |
-          CLEAN_PASS=$(echo -n "${{ secrets.POSTGRES_PASSWORD }}" | tr -d '\n\r')
           cat <<EOF > terraform/rds/secrets.auto.tfvars
           db_username = "${{ secrets.POSTGRES_USER }}"
-          db_password = "${CLEAN_PASS}"
           databases = {
             auth      = { identifier = "rds-postgres-auth", db_name = "auth_db" }
             flag      = { identifier = "rds-postgres-flag", db_name = "flags_db" }

@@ -10,7 +10,7 @@ variable "db_username" {
 }
 
 variable "db_password" {
-  description = "Senha do PostgreSQL"
+  description = "Senha do banco de dados injetada pelo Secrets Manager"
   type        = string
   sensitive   = true
 }
@@ -22,3 +22,4 @@ variable "databases" {
     db_name    = string
   }))
 }
+

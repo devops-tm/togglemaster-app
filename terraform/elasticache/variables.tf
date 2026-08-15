@@ -17,3 +17,9 @@ variable "redis_port" {
   description = "Porta de conexao do Redis"
   type        = number
 }
+
+variable "redis_password" {
+  description = "Token de autenticacao do Redis injetado pelo Secrets Manager"
+  type        = string
+  sensitive   = true
+}

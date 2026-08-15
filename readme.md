@@ -159,3 +159,5 @@ O acesso dos clientes ocorre através do **NGINX Ingress Controller**, publicado
 - Os fluxos de CI locais foram concluídos e a estrutura modular de IaC via Terraform foi definida seguindo as restrições da AWS Academy.
 
 - uso de pipeline multistage paralelo para otimizacao de tempo.
+
+- reestruturacao de diretorios e escrita de arquivos YAML para orquestrar as esteiras

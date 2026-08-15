@@ -2,6 +2,22 @@ data "aws_vpc" "default" {
   default = true
 }
 
+data "aws_secretsmanager_secret" "db_secret" {
+  for_each = var.databases
+  name     = "togglemaster/prod/${each.key}-credentials"
+}
+
+data "aws_secretsmanager_secret_version" "db_secret_val" {
+  for_each  = var.databases
+  secret_id = data.aws_secretsmanager_secret.db_secret[each.key].id
+}
+
+locals  {
+  db_creds = {
+    for k, v in data.aws_secretsmanager_secret_version.db_secret_val : k => jsondecode(v.secret_string)
+  }
+}
+
 resource "aws_security_group" "postgres" {
   for_each = var.databases
 
@@ -38,7 +54,7 @@ resource "aws_db_instance" "postgres" {
 
   db_name  = each.value.db_name
   username = var.db_username
-  password = var.db_password
+  password = local.db_creds[each.key]["password"]
 
   publicly_accessible = false
   multi_az            = false
