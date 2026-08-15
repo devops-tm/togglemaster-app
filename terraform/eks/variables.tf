@@ -42,5 +42,5 @@ variable "min_size" {
 variable "max_size" {
   description = "Quantidade máxima de instâncias"
   type        = number
-  default     = 3
+  default     = 4
 }
