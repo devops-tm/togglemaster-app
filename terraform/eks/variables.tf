@@ -12,7 +12,7 @@ variable "cluster_name" {
 variable "cluster_version" {
   description = "Versão do Kubernetes"
   type        = string
-  default     = "1.29"
+  default     = "1.30"
 }
 
 variable "node_group_name" {
