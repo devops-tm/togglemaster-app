@@ -25,7 +25,7 @@ env:
 
 jobs:
   setup:
-    name: Setup Backend S3
+    name: Verify Backend S3
     runs-on: ubuntu-latest
     steps:
       - uses: aws-actions/configure-aws-credentials@v4
@@ -34,10 +34,11 @@ jobs:
           aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
+      - name: Mask sensitive strings in logs
+        run: |
+          echo "::add-mask::${{ secrets.AWS_SENSITIVE_IDENTITY }}"
       - run: |
-          if ! aws s3api head-bucket --bucket "$BUCKET_STATE" 2>/dev/null; then
-            aws s3 mb "s3://$BUCKET_STATE" --region "$AWS_REGION"
-          fi
+          aws s3api head-bucket --bucket "$BUCKET_STATE"
 
   base_infra:
     name: ECR and Serverless
@@ -52,6 +53,9 @@ jobs:
           aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
+      - name: Mask sensitive strings in logs
+        run: |
+          echo "::add-mask::${{ secrets.AWS_SENSITIVE_IDENTITY }}"
       - run: |
           cat <<EOF > terraform/ecr/secrets.auto.tfvars
           ecr_repositories = ["auth-service", "flag-service", "targeting-service", "evaluation-service", "analytics-service"]
@@ -81,6 +85,9 @@ jobs:
           aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
+      - name: Mask sensitive strings in logs
+        run: |
+          echo "::add-mask::${{ secrets.AWS_SENSITIVE_IDENTITY }}"
           
       - name: Deploy Secrets Manager
         run: |
@@ -125,6 +132,9 @@ jobs:
           aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
+      - name: Mask sensitive strings in logs
+        run: |
+          echo "::add-mask::${{ secrets.AWS_SENSITIVE_IDENTITY }}"
       - run: |
           cd terraform/eks
           terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION"
@@ -150,6 +160,9 @@ jobs:
           aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
+      - name: Mask sensitive strings in logs
+        run: |
+          echo "::add-mask::${{ secrets.AWS_SENSITIVE_IDENTITY }}"
       - env:
           EKS_SG: ${{ needs.compute_infra.outputs.eks_sg_id }}
         run: |

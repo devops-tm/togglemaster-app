@@ -39,6 +39,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip setuptools wheel
           pip install -r requirements.txt
+          pip install pytest
 
       - name: Test 
         working-directory: ${{ inputs.service-path }}
@@ -46,7 +47,6 @@ jobs:
           pytest --maxfail=1 --disable-warnings -q
           python -c "import sys; print(sys.version)"
 
-## Lint solution usado pela Microsoft https://github.com/microsoft/real-time-intelligence-operations-solution-accelerator/blob/main/.github/workflows/pylint.yml
   lint-analysis:
     name: Lint Analysis
     runs-on: ${{ inputs.os }}
@@ -96,8 +96,3 @@ jobs:
           severity: 'CRITICAL'
           exit-code: '1'
           ignore-unfixed: true
-
-
-
-
-    
