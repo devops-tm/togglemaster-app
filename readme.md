@@ -161,3 +161,5 @@ O acesso dos clientes ocorre através do **NGINX Ingress Controller**, publicado
 - uso de pipeline multistage paralelo para otimizacao de tempo.
 
 - reestruturacao de diretorios e escrita de arquivos YAML para orquestrar as esteiras
+
+- Decisão de arquitetura por workflows reutilizáveis (workflow_call) no repositório de aplicação.
