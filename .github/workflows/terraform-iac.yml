@@ -38,7 +38,7 @@ jobs:
         run: |
           echo "::add-mask::${{ secrets.AWS_SENSITIVE_IDENTITY }}"
       - run: |
-          aws s3api head-bucket --bucket "$BUCKET_STATE"
+          echo "Skipping explicit head-bucket check due to AWS Academy IAM restrictions. Terraform init will handle backend state interaction."
 
   base_infra:
     name: ECR and Serverless
