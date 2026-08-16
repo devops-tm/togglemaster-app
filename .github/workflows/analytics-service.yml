@@ -14,8 +14,8 @@ jobs:
   call-py:
     uses: ./.github/workflows/reusable-py.yml
     with:
-      service_path: 'src/analytics-service'
-      service_name: 'analytics-service'
+      service-path: 'src/analytics-service'
+      service-name: 'analytics-service'
       os: 'ubuntu-latest'
       python-version: '3.9'
     secrets: inherit
@@ -24,7 +24,7 @@ jobs:
     needs: call-py
     uses: ./.github/workflows/reusable-docker.yml
     with:
-      service_path: 'src/analytics-service'
+      service-path: 'src/analytics-service'
       image-name: 'analytics-service'
     secrets: inherit
   

@@ -3,10 +3,10 @@ name: Go package
 on:
   workflow_call:
     inputs:
-      service_path:
+      service-path:
         required: true
         type: string
-      service_name:
+      service-name:
         required: true
         type: string
       go-version:

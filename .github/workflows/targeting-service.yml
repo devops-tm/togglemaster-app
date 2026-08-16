@@ -14,8 +14,8 @@ jobs:
   call-py:
     uses: ./.github/workflows/reusable-py.yml
     with:
-      service_path: 'src/targeting-service'
-      service_name: 'targeting-service'
+      service-path: 'src/targeting-service'
+      service-name: 'targeting-service'
       os: 'ubuntu-latest'
       python-version: '3.9'
     secrets: inherit
@@ -24,7 +24,7 @@ jobs:
     needs: call-py
     uses: ./.github/workflows/reusable-docker.yml
     with:
-      service_path: 'src/targeting-service'
+      service-path: 'src/targeting-service'
       image-name: 'targeting-service'
     secrets: inherit
   

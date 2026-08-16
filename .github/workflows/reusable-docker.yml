@@ -3,7 +3,7 @@ name: Docker Pipeline
 on:
   workflow_call:
     inputs:
-      service_path:
+      service-path:
         required: true
         type: string
       image-name:
