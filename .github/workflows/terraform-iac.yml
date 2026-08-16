@@ -61,7 +61,7 @@ jobs:
           ecr_repositories = ["auth-service", "flag-service", "targeting-service", "evaluation-service", "analytics-service"]
           EOF
           cd terraform/ecr
-          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION"
+          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION" -reconfigure
           terraform ${{ github.event.inputs.action }} -auto-approve
       - run: |
           cat <<EOF > terraform/serverless/secrets.auto.tfvars
@@ -69,7 +69,7 @@ jobs:
           dynamodb_table_name = "ToggleMasterAnalytics"
           EOF
           cd terraform/serverless
-          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION"
+          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION" -reconfigure
           terraform ${{ github.event.inputs.action }} -auto-approve
 
   data_infra:
@@ -92,7 +92,7 @@ jobs:
       - name: Deploy Secrets Manager
         run: |
           cd terraform/secrets
-          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION"
+          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION" -reconfigure
           terraform ${{ github.event.inputs.action }} -auto-approve
 
       - run: |
@@ -105,7 +105,7 @@ jobs:
           }
           EOF
           cd terraform/rds
-          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION"
+          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION" -reconfigure
           terraform ${{ github.event.inputs.action }} -auto-approve
       - run: |
           cat <<EOF > terraform/elasticache/secrets.auto.tfvars
@@ -114,7 +114,7 @@ jobs:
           redis_port = 6379
           EOF
           cd terraform/elasticache
-          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION"
+          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION" -reconfigure
           terraform ${{ github.event.inputs.action }} -auto-approve
 
   compute_infra:
@@ -137,7 +137,7 @@ jobs:
           echo "::add-mask::${{ secrets.AWS_SENSITIVE_IDENTITY }}"
       - run: |
           cd terraform/eks
-          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION"
+          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION" -reconfigure
           terraform ${{ github.event.inputs.action }} -auto-approve
       - id: export_sg
         if: ${{ github.event.inputs.action == 'apply' }}
@@ -172,5 +172,5 @@ jobs:
           redis_cluster_id        = "togglemaster-redis"
           EOF
           cd terraform/networking
-          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION"
+          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION" -reconfigure
           terraform apply -auto-approve

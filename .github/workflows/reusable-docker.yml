@@ -20,10 +20,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Build an image from Dockerfile
-        working-directory: ${{ inputs.service_path }}
-        run: |
-          docker build -t ${{ inputs.image-name }} .
+      - name: Build Docker Image
+        working-directory: ${{ inputs.service-path }}
+        run: docker build -t ${{ inputs.service-name }} .
 
       - name: Run Trivy vulnerability scanner in image mode
         uses: aquasecurity/trivy-action@master
