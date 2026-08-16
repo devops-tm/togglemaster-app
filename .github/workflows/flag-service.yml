@@ -4,102 +4,26 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'flag-service/**'
+      - 'src/flag-service/**'
   pull_request:
     branches: [ main ]
     paths:
-      - 'flag-service/**'
+      - 'src/flag-service/**'
 
 jobs:
-  build-and-test:
-    name: Build and Test
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+  call-py:
+    uses: ./.github/workflows/reusable-py.yml
+    with:
+      service_path: 'src/flag-service'
+      service_name: 'flag-service'
+      os: 'ubuntu-latest'
+      python-version: '3.9'
+    secrets: inherit
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version-file: 'flag-service/.python-version'
-          cache: 'pip'
-
-      - name: Install dependencies
-        working-directory: ./flag-service
-        run: |
-          pip install --no-cache-dir -r requirements.txt
-
-  lint-analysis:
-    name: Lint Analysis
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version-file: 'flag-service/.python-version'
-
-      - name: Install Flake8
-        run: pip install flake8
-
-      - name: Run Flake8
-        working-directory: ./flag-service
-        run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-
-  security-scan:
-    name: Security Scan (SAST & SCA)
-    needs: [build-and-test, lint-analysis]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version-file: 'flag-service/.python-version'
-
-      - name: Install Bandit for SAST
-        run: pip install bandit
-
-      - name: Run Bandit Security Scanner
-        working-directory: ./flag-service
-        run: bandit -r . -lll -ii -x ./tests
-
-      - name: Run Trivy vulnerability scanner in fs mode
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: './flag-service'
-          severity: 'CRITICAL'
-          exit-code: '1'
-          ignore-unfixed: true
-
-  docker-build:
-    name: Docker Build & Image Scan
-    needs: security-scan
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Build an image from Dockerfile
-        working-directory: ./flag-service # (ou targeting-service conforme o arquivo)
-        run: |
-          docker build -t togglemaster/flag-service:${{ github.sha }} .
-          docker save togglemaster/flag-service:${{ github.sha }} -o /tmp/flag-service.tar
-
-      - name: Load image for Trivy
-        run: |
-          docker load -i /tmp/flag-service.tar
-
-      - name: Run Trivy vulnerability scanner on image
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: 'togglemaster/flag-service:${{ github.sha }}'
-          format: 'table'
-          severity: 'CRITICAL'
-          exit-code: '1'
-          ignore-unfixed: true
+  call-docker:
+    needs: call-py
+    uses: ./.github/workflows/reusable-docker.yml
+    with:
+      service_path: 'src/flag-service'
+      image-name: 'flag-service'
+    secrets: inherit

@@ -4,91 +4,26 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'evaluation-service/**'
+      - 'src/evaluation-service/**'
   pull_request:
     branches: [ main ]
     paths:
-      - 'evaluation-service/**'
+      - 'src/evaluation-service/**'
 
 jobs:
-  build-and-test:
-    name: Build and Test
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+  call-go:
+    uses: ./.github/workflows/reusable-go-ci.yml
+    with:
+      service_path: 'src/evaluation-service'
+      service_name: 'evaluation-service'
+      os: 'ubuntu-latest'
+      go-version: '1.21'
+    secrets: inherit
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: 'evaluation-service/go.mod'
-          cache-dependency-path: evaluation-service/go.sum
-
-      - name: Build
-        working-directory: ./evaluation-service
-        run: |
-          go mod download
-          CGO_ENABLED=0 GOOS=linux go build -o main .
-
-  lint-analysis:
-    name: Lint Analysis
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: 'evaluation-service/go.mod'
-          cache-dependency-path: evaluation-service/go.sum
-
-      - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v3
-        with:
-          version: latest
-          working-directory: evaluation-service
-
-  security-scan:
-    name: Security Scan (SAST & SCA)
-    needs: [build-and-test, lint-analysis]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run Gosec Security Scanner (SAST)
-        uses: securego/gosec@master
-        with:
-          args: ./evaluation-service/...
-
-      - name: Run Trivy vulnerability scanner in fs mode (SCA)
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: './evaluation-service'
-          severity: 'CRITICAL'
-          exit-code: '1'
-          ignore-unfixed: true
-
-  docker-build:
-    name: Docker Build & Image Scan
-    needs: security-scan
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Build an image from Dockerfile
-        working-directory: ./evaluation-service
-        run: |
-          docker build -t togglemaster/evaluation-service:${{ github.sha }} .
-
-      - name: Run Trivy vulnerability scanner on image
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: 'togglemaster/evaluation-service:${{ github.sha }}'
-          format: 'table'
-          severity: 'CRITICAL'
-          exit-code: '1'
-          ignore-unfixed: true
+  call-docker:
+    needs: call-go
+    uses: ./.github/workflows/reusable-docker.yml
+    with:
+      service_path: 'src/evaluation-service'
+      image-name: 'evaluation-service'
+    secrets: inherit
