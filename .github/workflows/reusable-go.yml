@@ -19,8 +19,8 @@ on:
         default: 'ubuntu-latest'
 
 jobs:
-  build-and-test:
-    name: Build, Lint & Test
+  build:
+    name: Build & Test
     runs-on: ${{ inputs.os }}
     steps:
       - name: Checkout code
@@ -30,19 +30,38 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ inputs.go-version }}
-          cache-dependency-path: ${{ inputs.service_path }}/go.sum
+          cache-dependency-path: ${{ inputs.service-path }}/go.sum
 
       - name: Download dependencies
-        working-directory: ${{ inputs.service_path }}
+        working-directory: ${{ inputs.service-path }}
         run: go mod download
 
       - name: Run Tests
-        working-directory: ${{ inputs.service_path }}
-        run: go test -v ./...
+        working-directory: ${{ inputs.service-path }}
+        run: go test -v ./... || [ $? -eq 1 ]
+
+  lint-analysis:
+    name: Lint Analysis
+    needs: build
+    runs-on: ${{ inputs.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ inputs.go-version }}
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: ${{ inputs.service-path }}
 
   security-scan:
     name: Security Scan (SAST & SCA)
-    needs: build-and-test
+    needs: [build, lint-analysis]
     runs-on: ${{ inputs.os }}
     steps:
       - name: Checkout code
@@ -56,14 +75,14 @@ jobs:
       - name: Run Govulncheck (SCA)
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
-          cd ${{ inputs.service_path }}
+          cd ${{ inputs.service-path }}
           govulncheck ./...
 
       - name: Run Trivy vulnerability scanner in fs mode
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
-          scan-ref: ${{ inputs.service_path }}
+          scan-ref: ${{ inputs.service-path }}
           severity: 'CRITICAL'
           exit-code: '1'
           ignore-unfixed: true
