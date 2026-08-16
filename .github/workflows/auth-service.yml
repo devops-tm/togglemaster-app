@@ -12,7 +12,7 @@ on:
 
 jobs:
   call-go:
-    uses: ./.github/workflows/reusable-go-ci.yml
+    uses: ./.github/workflows/reusable-go.yml
     with:
       service-path: 'src/auth-service'
       service-name: 'auth-service'

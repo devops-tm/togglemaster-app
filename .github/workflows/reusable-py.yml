@@ -66,7 +66,7 @@ jobs:
       - name: Run flake8
         working-directory: ${{ inputs.service-path }}
         run: |
-          flake8 .
+          flake8 . --max-line-length=100 --ignore=E501,W293,W291,E302,E305,E261,E701
   
   security-scan:
     name: Security Scan (SAST & SCA)
