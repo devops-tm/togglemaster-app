@@ -14,7 +14,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - ./auth-service/db/init.sql:/docker-entrypoint-initdb.d/init.sql:Z
+      - ./src/auth-service/db/init.sql:/docker-entrypoint-initdb.d/init.sql:Z
     networks:
       - toggle-net
     healthcheck:
@@ -32,8 +32,8 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      - ./flag-service/db/init.sql:/docker-entrypoint-initdb.d/01-init-flags.sql:Z
-      - ./targeting-service/db/init.sql:/docker-entrypoint-initdb.d/02-init-targeting.sql:Z
+      - ./src/flag-service/db/init.sql:/docker-entrypoint-initdb.d/01-init-flags.sql:Z
+      - ./src/targeting-service/db/init.sql:/docker-entrypoint-initdb.d/02-init-targeting.sql:Z
     networks:
       - toggle-net
     healthcheck:
@@ -51,7 +51,7 @@ services:
 
   auth-service:
     build:
-      context: ./auth-service
+      context: ./src/auth-service
     restart: on-failure
     ports:
       - "8001:8001"
@@ -67,7 +67,7 @@ services:
 
   flag-service:
     build:
-      context: ./flag-service
+      context: ./src/flag-service
     ports:
       - "8002:8002"
     environment:
@@ -84,7 +84,7 @@ services:
 
   targeting-service:
     build:
-      context: ./targeting-service
+      context: ./src/targeting-service
     ports:
       - "8003:8003"
     environment:
@@ -101,7 +101,7 @@ services:
 
   evaluation-service:
     build:
-      context: ./evaluation-service
+      context: ./src/evaluation-service
     ports:
       - "8004:8004"
     environment:
@@ -129,7 +129,7 @@ services:
 
   analytics-service:
     build:
-      context: ./analytics-service
+      context: ./src/analytics-service
     ports:
       - "8005:8005"
     environment:

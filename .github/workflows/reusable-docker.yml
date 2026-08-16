@@ -1,0 +1,5 @@
+name: Docker Pipeline
+
+on:
+  workflow_call:
+    inputs:

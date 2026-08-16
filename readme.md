@@ -130,15 +130,7 @@ O acesso dos clientes ocorre através do **NGINX Ingress Controller**, publicado
      (5432)           (6379)        (HTTPS 443)
 ```
 
-# Evolução
-
-- Stack Baseada em Plataforma
-- Linter e SAST: SonarCloud
-- SCA e Container Scan: Trivy
-- Vantagens: Fornece um dashboard web interativo para gerenciar a dívida técnica, acompanhar o histórico de cobertura e visualizar as falhas de segurança de forma centralizada.
-- Desvantagens: Requer a criação de uma conta no SonarCloud e a configuração de tokens de integração nos repositórios. O pipeline sofre um acréscimo no tempo total de execução devido à comunicação com a API da plataforma.
-
-# Desafios enfrentados
+# Desafios Enfrentados e Soluções nessa fase
 
 - Decisão de utilização de SaaS Github Actions ou self-hosted CI com Jenkins
 
@@ -163,3 +155,13 @@ O acesso dos clientes ocorre através do **NGINX Ingress Controller**, publicado
 - reestruturacao de diretorios e escrita de arquivos YAML para orquestrar as esteiras
 
 - Decisão de arquitetura por workflows reutilizáveis (workflow_call) no repositório de aplicação.
+
+- Reorganização do diretorio remoção dos microserviços na raiz, movido para o path app/
+
+# Evolução da stack para proximas fases
+
+- Stack Baseada em Plataforma
+- Linter e SAST: SonarCloud
+- SCA e Container Scan: Trivy
+- Vantagens: Fornece um dashboard web interativo para gerenciar a dívida técnica, acompanhar o histórico de cobertura e visualizar as falhas de segurança de forma centralizada.
+- Desvantagens: Requer a criação de uma conta no SonarCloud e a configuração de tokens de integração nos repositórios. O pipeline sofre um acréscimo no tempo total de execução devido à comunicação com a API da plataforma.
