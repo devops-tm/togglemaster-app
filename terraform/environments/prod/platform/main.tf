@@ -22,11 +22,11 @@ module "ecr" {
 module "sqs" {
   source = "../../../modules/sqs"
 
-  sqs_queue_name = var.sqs_queue_name
+  queue_name = var.sqs_queue_name
 }
 
 module "dynamodb" {
   source = "../../../modules/dynamodb"
 
-  dynamodb_table_name = var.dynamodb_table_name
+  table_name = var.dynamodb_table_name
 }
