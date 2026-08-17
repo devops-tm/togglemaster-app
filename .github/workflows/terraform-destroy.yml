@@ -49,7 +49,7 @@ jobs:
           aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Validate State Buckets
+      - name: Validate State Backend
         shell: bash
         run: |
           set -e
@@ -60,10 +60,9 @@ jobs:
           fi
 
           aws s3api head-bucket \
-            --bucket "$BUCKET_STATE" \
-            --region "$AWS_REGION"
+            --bucket "$BUCKET_STATE"
 
-          echo "Terraform state bucket validado."
+          echo "State bucket validado."
 
 
   destroy_networking:
@@ -96,35 +95,61 @@ jobs:
         working-directory: terraform/environments/prod/networking
         run: terraform validate
 
-      - name: State Check
+      - name: Check State
         working-directory: terraform/environments/prod/networking
         shell: bash
         run: |
           set -e
 
-          if ! terraform state list >/dev/null 2>&1; then
-            echo "ERROR: Terraform state não pôde ser carregado."
-            exit 1
+          if aws s3api head-object \
+            --bucket "$BUCKET_STATE" \
+            --key "prod/networking/terraform.tfstate" >/dev/null 2>&1; then
+
+            echo "State encontrado."
+
+            terraform state list
+
+          else
+
+            echo "State não encontrado."
+            echo "Networking não possui recursos gerenciados."
+
           fi
-
-          echo "Terraform state validado."
-
-          terraform state list
 
       - name: Plan Destroy
         working-directory: terraform/environments/prod/networking
+        shell: bash
         run: |
-          terraform plan \
-            -destroy \
-            -var-file="terraform.tfvars" \
-            -out=destroy.tfplan
+          set -e
+
+          if aws s3api head-object \
+            --bucket "$BUCKET_STATE" \
+            --key "prod/networking/terraform.tfstate" >/dev/null 2>&1; then
+
+            terraform plan \
+              -destroy \
+              -var-file="terraform.tfvars" \
+              -out=destroy.tfplan
+
+          else
+
+            echo "Nenhum state encontrado. Nada para destruir."
+
+          fi
 
       - name: Destroy
         working-directory: terraform/environments/prod/networking
+        shell: bash
         run: |
-          terraform apply \
-            -auto-approve \
-            destroy.tfplan
+          set -e
+
+          if [ -f destroy.tfplan ]; then
+            terraform apply \
+              -auto-approve \
+              destroy.tfplan
+          else
+            echo "Nenhum plano de destroy criado."
+          fi
 
 
   destroy_data:
@@ -157,35 +182,60 @@ jobs:
         working-directory: terraform/environments/prod/data
         run: terraform validate
 
-      - name: State Check
+      - name: Check State
         working-directory: terraform/environments/prod/data
         shell: bash
         run: |
           set -e
 
-          if ! terraform state list >/dev/null 2>&1; then
-            echo "ERROR: Terraform state não pôde ser carregado."
-            exit 1
+          if aws s3api head-object \
+            --bucket "$BUCKET_STATE" \
+            --key "prod/data/terraform.tfstate" >/dev/null 2>&1; then
+
+            echo "State encontrado."
+            terraform state list
+
+          else
+
+            echo "State não encontrado."
+            echo "Data não possui recursos gerenciados."
+
           fi
-
-          echo "Terraform state validado."
-
-          terraform state list
 
       - name: Plan Destroy
         working-directory: terraform/environments/prod/data
+        shell: bash
         run: |
-          terraform plan \
-            -destroy \
-            -var-file="terraform.tfvars" \
-            -out=destroy.tfplan
+          set -e
+
+          if aws s3api head-object \
+            --bucket "$BUCKET_STATE" \
+            --key "prod/data/terraform.tfstate" >/dev/null 2>&1; then
+
+            terraform plan \
+              -destroy \
+              -var-file="terraform.tfvars" \
+              -out=destroy.tfplan
+
+          else
+
+            echo "Nenhum state encontrado. Nada para destruir."
+
+          fi
 
       - name: Destroy
         working-directory: terraform/environments/prod/data
+        shell: bash
         run: |
-          terraform apply \
-            -auto-approve \
-            destroy.tfplan
+          set -e
+
+          if [ -f destroy.tfplan ]; then
+            terraform apply \
+              -auto-approve \
+              destroy.tfplan
+          else
+            echo "Nenhum plano de destroy criado."
+          fi
 
 
   destroy_platform:
@@ -218,35 +268,60 @@ jobs:
         working-directory: terraform/environments/prod/platform
         run: terraform validate
 
-      - name: State Check
+      - name: Check State
         working-directory: terraform/environments/prod/platform
         shell: bash
         run: |
           set -e
 
-          if ! terraform state list >/dev/null 2>&1; then
-            echo "ERROR: Terraform state não pôde ser carregado."
-            exit 1
+          if aws s3api head-object \
+            --bucket "$BUCKET_STATE" \
+            --key "prod/platform/terraform.tfstate" >/dev/null 2>&1; then
+
+            echo "State encontrado."
+            terraform state list
+
+          else
+
+            echo "State não encontrado."
+            echo "Platform não possui recursos gerenciados."
+
           fi
-
-          echo "Terraform state validado."
-
-          terraform state list
 
       - name: Plan Destroy
         working-directory: terraform/environments/prod/platform
+        shell: bash
         run: |
-          terraform plan \
-            -destroy \
-            -var-file="terraform.tfvars" \
-            -out=destroy.tfplan
+          set -e
+
+          if aws s3api head-object \
+            --bucket "$BUCKET_STATE" \
+            --key "prod/platform/terraform.tfstate" >/dev/null 2>&1; then
+
+            terraform plan \
+              -destroy \
+              -var-file="terraform.tfvars" \
+              -out=destroy.tfplan
+
+          else
+
+            echo "Nenhum state encontrado. Nada para destruir."
+
+          fi
 
       - name: Destroy
         working-directory: terraform/environments/prod/platform
+        shell: bash
         run: |
-          terraform apply \
-            -auto-approve \
-            destroy.tfplan
+          set -e
+
+          if [ -f destroy.tfplan ]; then
+            terraform apply \
+              -auto-approve \
+              destroy.tfplan
+          else
+            echo "Nenhum plano de destroy criado."
+          fi
 
 
   destroy_compute:
@@ -279,35 +354,60 @@ jobs:
         working-directory: terraform/environments/prod/compute
         run: terraform validate
 
-      - name: State Check
+      - name: Check State
         working-directory: terraform/environments/prod/compute
         shell: bash
         run: |
           set -e
 
-          if ! terraform state list >/dev/null 2>&1; then
-            echo "ERROR: Terraform state não pôde ser carregado."
-            exit 1
+          if aws s3api head-object \
+            --bucket "$BUCKET_STATE" \
+            --key "prod/compute/terraform.tfstate" >/dev/null 2>&1; then
+
+            echo "State encontrado."
+            terraform state list
+
+          else
+
+            echo "State não encontrado."
+            echo "Compute não possui recursos gerenciados."
+
           fi
-
-          echo "Terraform state validado."
-
-          terraform state list
 
       - name: Plan Destroy
         working-directory: terraform/environments/prod/compute
+        shell: bash
         run: |
-          terraform plan \
-            -destroy \
-            -var-file="terraform.tfvars" \
-            -out=destroy.tfplan
+          set -e
+
+          if aws s3api head-object \
+            --bucket "$BUCKET_STATE" \
+            --key "prod/compute/terraform.tfstate" >/dev/null 2>&1; then
+
+            terraform plan \
+              -destroy \
+              -var-file="terraform.tfvars" \
+              -out=destroy.tfplan
+
+          else
+
+            echo "Nenhum state encontrado. Nada para destruir."
+
+          fi
 
       - name: Destroy
         working-directory: terraform/environments/prod/compute
+        shell: bash
         run: |
-          terraform apply \
-            -auto-approve \
-            destroy.tfplan
+          set -e
+
+          if [ -f destroy.tfplan ]; then
+            terraform apply \
+              -auto-approve \
+              destroy.tfplan
+          else
+            echo "Nenhum plano de destroy criado."
+          fi
 
 
   destroy_security:
@@ -343,32 +443,57 @@ jobs:
         working-directory: terraform/environments/prod/security
         run: terraform validate
 
-      - name: State Check
+      - name: Check State
         working-directory: terraform/environments/prod/security
         shell: bash
         run: |
           set -e
 
-          if ! terraform state list >/dev/null 2>&1; then
-            echo "ERROR: Terraform state não pôde ser carregado."
-            exit 1
+          if aws s3api head-object \
+            --bucket "$BUCKET_STATE" \
+            --key "prod/security/terraform.tfstate" >/dev/null 2>&1; then
+
+            echo "State encontrado."
+            terraform state list
+
+          else
+
+            echo "State não encontrado."
+            echo "Security não possui recursos gerenciados."
+
           fi
-
-          echo "Terraform state validado."
-
-          terraform state list
 
       - name: Plan Destroy
         working-directory: terraform/environments/prod/security
+        shell: bash
         run: |
-          terraform plan \
-            -destroy \
-            -var-file="terraform.tfvars" \
-            -out=destroy.tfplan
+          set -e
+
+          if aws s3api head-object \
+            --bucket "$BUCKET_STATE" \
+            --key "prod/security/terraform.tfstate" >/dev/null 2>&1; then
+
+            terraform plan \
+              -destroy \
+              -var-file="terraform.tfvars" \
+              -out=destroy.tfplan
+
+          else
+
+            echo "Nenhum state encontrado. Nada para destruir."
+
+          fi
 
       - name: Destroy
         working-directory: terraform/environments/prod/security
+        shell: bash
         run: |
-          terraform apply \
-            -auto-approve \
-            destroy.tfplan
+          set -e
+
+          if [ -f destroy.tfplan ]; then
+            terraform apply \
+              -auto-approve \
+              destroy.tfplan
+          else
+            echo "Nenhum plano de destroy criado."
+          fi
