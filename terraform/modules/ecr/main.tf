@@ -1,4 +1,4 @@
-resource "aws_ecr_repository" "togglemaster_repos" {
+resource "aws_ecr_repository" "repositories" {
   for_each = toset(var.ecr_repositories)
 
   name                 = each.key

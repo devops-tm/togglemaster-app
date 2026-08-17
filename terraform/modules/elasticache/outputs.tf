@@ -9,3 +9,9 @@ output "redis_cluster_id" {
 
   value = aws_elasticache_cluster.redis.cluster_id
 }
+
+output "redis_security_group_id" {
+  description = "Security Group do Redis"
+
+  value = aws_security_group.redis.id
+}

@@ -1,4 +1,4 @@
 variable "ecr_repositories" {
-  description = "Lista com os nomes dos repositorios ECR"
+  description = "Lista de nomes dos repositórios ECR"
   type        = list(string)
 }

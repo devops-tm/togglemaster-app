@@ -1,7 +1,6 @@
-variable "db_username" {
-  description = "Usuário administrador do PostgreSQL"
+variable "aws_region" {
+  description = "Região AWS"
   type        = string
-  sensitive   = true
 }
 
 variable "databases" {

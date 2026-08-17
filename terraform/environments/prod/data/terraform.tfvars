@@ -1,5 +1,3 @@
-aws_region = "us-east-1"
-
 databases = {
   auth = {
     identifier = "rds-postgres-auth"
