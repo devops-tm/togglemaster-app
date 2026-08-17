@@ -48,16 +48,15 @@ resource "aws_elasticache_subnet_group" "redis" {
 }
 
 resource "aws_elasticache_cluster" "redis" {
-  cluster_id         = var.cluster_id
-  engine             = "redis"
-  node_type          = var.node_type
-  num_cache_nodes    = 1
+  cluster_id           = var.cluster_id
+  engine               = "redis"
+  node_type            = var.node_type
+  num_cache_nodes      = 1
   parameter_group_name = "default.redis7"
-  port               = var.redis_port
+  port                 = var.redis_port
+
   subnet_group_name  = aws_elasticache_subnet_group.redis.name
   security_group_ids = [aws_security_group.redis.id]
-
-  auth_token = local.redis_creds["password"]
 
   tags = {
     Project     = "ToggleMaster"

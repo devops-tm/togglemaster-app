@@ -25,7 +25,7 @@ module "ecr" {
 module "sqs" {
   source = "../../../modules/sqs"
 
-  sqs_queue_name = var.sqs_queue_name
+  queue_name = var.sqs_queue_name
 }
 
 module "dynamodb" {
