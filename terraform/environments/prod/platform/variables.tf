@@ -4,7 +4,7 @@ variable "aws_region" {
 }
 
 variable "ecr_repositories" {
-  description = "Lista de repositórios ECR"
+  description = "Repositórios ECR"
   type        = list(string)
 }
 

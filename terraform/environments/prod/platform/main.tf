@@ -1,8 +1,5 @@
 terraform {
-  backend "s3" {
-    key     = "prod/platform/terraform.tfstate"
-    encrypt = true
-  }
+  backend "s3" {}
 
   required_providers {
     aws = {
@@ -19,17 +16,20 @@ provider "aws" {
 module "ecr" {
   source = "../../../modules/ecr"
 
+  aws_region       = var.aws_region
   ecr_repositories = var.ecr_repositories
 }
 
 module "sqs" {
   source = "../../../modules/sqs"
 
-  queue_name = var.sqs_queue_name
+  aws_region     = var.aws_region
+  sqs_queue_name = var.sqs_queue_name
 }
 
 module "dynamodb" {
   source = "../../../modules/dynamodb"
 
+  aws_region          = var.aws_region
   dynamodb_table_name = var.dynamodb_table_name
 }
