@@ -52,7 +52,7 @@ jobs:
           fi
 
   security_infra:
-    name: Security (SSM Parameter Store)
+    name: Security
     needs: setup
     runs-on: ubuntu-latest
     steps:

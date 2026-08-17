@@ -12,11 +12,6 @@ terraform.tfstate.backup
 # Arquivo de trava de dependencias do terraform
 .terraform.lock.hcl
 
-# Arquivos de variaveis contendo possiveis segredos
-*.tfvars
-*.tfvars.json
-kubernetes/configmap.yaml
-
 
 # Logs de erro e sobrescritas
 crash.log
