@@ -2,10 +2,12 @@ data "aws_vpc" "default" {
   default = true
 }
 
-data "aws_subnet_ids" "all" {
-  vpc_id = data.aws_vpc.default.id
+data "aws_subnets" "all" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
 }
-
 data "aws_ssm_parameter" "redis_password" {
   name = "/togglemaster/prod/redis/credentials"
 }
@@ -42,7 +44,7 @@ resource "aws_security_group" "redis" {
 
 resource "aws_elasticache_subnet_group" "redis" {
   name       = "togglemaster-redis-subnet-group"
-  subnet_ids = data.aws_subnet_ids.all.ids
+  subnet_ids = data.aws_subnets.all.ids
 }
 
 resource "aws_elasticache_cluster" "redis" {
