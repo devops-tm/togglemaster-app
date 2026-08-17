@@ -3,17 +3,7 @@ variable "aws_region" {
   type        = string
 }
 
-variable "eks_node_security_group" {
-  description = "Security Group do EKS"
-  type        = string
-}
-
-variable "rds_instances" {
-  description = "Identificadores das instâncias RDS"
-  type        = list(string)
-}
-
-variable "redis_cluster_id" {
-  description = "ID do cluster Redis"
+variable "terraform_state_bucket" {
+  description = "Bucket S3 utilizado para armazenar os Terraform States"
   type        = string
 }

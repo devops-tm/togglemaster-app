@@ -4,7 +4,7 @@ variable "eks_node_security_group" {
 }
 
 variable "rds_instance_identifiers" {
-  description = "Identificadores das instancias RDS"
+  description = "Identificadores das instâncias RDS"
   type        = set(string)
 }
 

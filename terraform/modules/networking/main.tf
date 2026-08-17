@@ -19,7 +19,10 @@ resource "aws_vpc_security_group_ingress_rule" "postgres" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "redis" {
-  security_group_id            = tolist(data.aws_elasticache_cluster.redis.security_group_ids)[0]
+  security_group_id = tolist(
+    data.aws_elasticache_cluster.redis.security_group_ids
+  )[0]
+
   referenced_security_group_id = var.eks_node_security_group
 
   ip_protocol = "tcp"
