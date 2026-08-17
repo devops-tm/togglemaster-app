@@ -97,7 +97,7 @@ jobs:
           terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION" -reconfigure
           terraform ${{ github.event.inputs.action }} -auto-approve  
 
-    data_infra:
+  data_infra:
     name: RDS and ElastiCache
     needs: [setup, security_infra]
     runs-on: ubuntu-latest
