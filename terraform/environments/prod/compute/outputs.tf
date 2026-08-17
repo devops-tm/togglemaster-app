@@ -1,30 +1,30 @@
 output "cluster_name" {
   description = "Nome do cluster EKS"
-  value       = aws_eks_cluster.eks.name
+  value       = module.eks.cluster_name
 }
 
 output "cluster_endpoint" {
   description = "Endpoint do cluster EKS"
-  value       = aws_eks_cluster.eks.endpoint
+  value       = module.eks.cluster_endpoint
 }
 
 output "cluster_certificate_authority_data" {
-  description = "Certificado da autoridade do cluster EKS"
-  value       = aws_eks_cluster.eks.certificate_authority[0].data
+  description = "Certificate Authority do cluster EKS"
+  value       = module.eks.cluster_certificate_authority_data
   sensitive   = true
 }
 
 output "cluster_primary_security_group_id" {
   description = "Security Group principal do cluster EKS"
-  value       = aws_eks_cluster.eks.vpc_config[0].cluster_security_group_id
+  value       = module.eks.cluster_primary_security_group_id
 }
 
 output "node_group_id" {
-  description = "ID do Node Group do EKS"
-  value       = aws_eks_node_group.nodes.id
+  description = "ID do Node Group"
+  value       = module.eks.node_group_id
 }
 
 output "node_security_group_id" {
-  description = "Security Group utilizado pelo EKS"
-  value       = aws_eks_cluster.eks.vpc_config[0].cluster_security_group_id
+  description = "Security Group utilizado pelos nodes do EKS"
+  value       = module.eks.node_security_group_id
 }
