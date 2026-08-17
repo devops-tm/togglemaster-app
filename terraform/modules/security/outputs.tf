@@ -6,9 +6,3 @@ output "ssm_db_parameter_names" {
     k => v.name
   }
 }
-
-output "ssm_redis_parameter_name" {
-  description = "Nome do parâmetro SSM das credenciais do Redis"
-
-  value = aws_ssm_parameter.redis_secret.name
-}
