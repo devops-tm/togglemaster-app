@@ -4,11 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: Acao do Terraform a ser executada
+        description: Ação do Terraform a ser executada
         required: true
-        default: apply
+        default: plan
         type: choice
         options:
+          - plan
           - apply
           - destroy
 
@@ -20,158 +21,68 @@ env:
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
   AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
   TF_VAR_aws_region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+  TF_VAR_db_username: ${{ secrets.DB_USERNAME }}
+
   BUCKET_STATE: ${{ secrets.TERRAFORM_STATE_BUCKET }}
 
 jobs:
-  setup:
-    name: Setup
+  terraform:
+    name: Terraform Production
     runs-on: ubuntu-latest
+
     steps:
-      - uses: aws-actions/configure-aws-credentials@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
-      
-      - name: Verify AWS and create bucket if needed
+
+      - name: Verify Terraform State Bucket
         run: |
-          # Verificar se o bucket existe
-          if ! aws s3api head-bucket --bucket $BUCKET_STATE 2>/dev/null; then
+          if ! aws s3api head-bucket --bucket "$BUCKET_STATE" 2>/dev/null; then
             echo "Bucket $BUCKET_STATE não existe. Criando..."
+
             aws s3api create-bucket \
-              --bucket $BUCKET_STATE \
-              --region $AWS_REGION \
-              --create-bucket-configuration LocationConstraint=$AWS_REGION
+              --bucket "$BUCKET_STATE" \
+              --region "$AWS_REGION" \
+              --create-bucket-configuration LocationConstraint="$AWS_REGION"
+
             aws s3api put-bucket-versioning \
-              --bucket $BUCKET_STATE \
+              --bucket "$BUCKET_STATE" \
               --versioning-configuration Status=Enabled
           else
             echo "Bucket $BUCKET_STATE já existe."
           fi
 
-  security_infra:
-    name: Security
-    needs: setup
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-      
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.AWS_REGION }}
-      
-      - name: Deploy SSM Parameters
+      - name: Terraform Init
+        working-directory: terraform/environments/prod
         run: |
-          cd terraform/security
-          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION" -reconfigure
-          terraform ${{ github.event.inputs.action }} -auto-approve
+          terraform init \
+            -backend-config="bucket=$BUCKET_STATE" \
+            -backend-config="region=$AWS_REGION" \
+            -reconfigure
 
-  data_infra:
-    name: RDS and ElastiCache
-    needs: [setup, security_infra]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-      
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.AWS_REGION }}
-      
-      - name: Deploy RDS
-        run: |
-          cd terraform/rds
-          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION" -reconfigure
-          terraform ${{ github.event.inputs.action }} -auto-approve
-      
-      - name: Deploy ElastiCache
-        run: |
-          cd terraform/elasticache
-          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION" -reconfigure
-          terraform ${{ github.event.inputs.action }} -auto-approve
+      - name: Terraform Plan
+        if: github.event.inputs.action == 'plan'
+        working-directory: terraform/environments/prod
+        run: terraform plan -var-file="terraform.tfvars"
 
-  ecr_serverless:
-    name: ECR and Serverless
-    needs: setup
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-      
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.AWS_REGION }}
-      
-      - name: Deploy ECR
-        run: |
-          cd terraform/ecr
-          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION" -reconfigure
-          terraform ${{ github.event.inputs.action }} -auto-approve
-      
-      - name: Deploy Serverless
-        run: |
-          cd terraform/serverless
-          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION" -reconfigure
-          terraform ${{ github.event.inputs.action }} -auto-approve
+      - name: Terraform Apply
+        if: github.event.inputs.action == 'apply'
+        working-directory: terraform/environments/prod
+        run: terraform apply -var-file="terraform.tfvars" -auto-approve
 
-  compute_infra:
-    name: EKS Cluster
-    needs: setup
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-      
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.AWS_REGION }}
-      
-      - name: Deploy EKS
-        run: |
-          cd terraform/eks
-          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION" -reconfigure
-          terraform ${{ github.event.inputs.action }} -auto-approve
-
-  networking_infra:
-    name: Networking Integrations
-    needs: [data_infra, compute_infra]
-    if: ${{ github.event.inputs.action == 'apply' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.AWS_REGION }}
-      - name: Mask sensitive strings in logs
-        run: |
-          echo "::add-mask::${{ secrets.AWS_SENSITIVE_IDENTITY }}"
-      - env:
-          EKS_SG: ${{ needs.compute_infra.outputs.eks_sg_id }}
-        run: |
-          cat <<EOF > terraform/networking/secrets.auto.tfvars
-          eks_node_security_group = "$EKS_SG"
-          rds_instances           = ["rds-postgres-auth", "rds-postgres-flag", "rds-postgres-targeting"]
-          redis_cluster_id        = "togglemaster-redis"
-          EOF
-          cd terraform/networking
-          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION" -reconfigure
-          terraform apply -auto-approve
+      - name: Terraform Destroy
+        if: github.event.inputs.action == 'destroy'
+        working-directory: terraform/environments/prod
+        run: terraform destroy -var-file="terraform.tfvars" -auto-approve
