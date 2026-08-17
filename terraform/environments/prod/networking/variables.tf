@@ -1,10 +1,14 @@
-variable "aws_region" {
-  description = "Região AWS"
+variable "eks_node_security_group" {
+  description = "Security Group utilizado pelo EKS"
   type        = string
 }
 
-variable "terraform_state_bucket" {
-  description = "Bucket S3 utilizado para armazenar os estados do Terraform"
+variable "rds_instance_identifiers" {
+  description = "Identificadores das instâncias RDS"
+  type        = set(string)
+}
+
+variable "redis_cluster_id" {
+  description = "Identificador do cluster Redis"
   type        = string
-  sensitive   = true
 }

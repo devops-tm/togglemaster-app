@@ -20,14 +20,11 @@ env:
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+
   AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
 
   TF_VAR_aws_region: ${{ secrets.AWS_REGION || 'us-east-1' }}
   TF_VAR_db_username: ${{ secrets.DB_USERNAME }}
-
-  # Disponibiliza o bucket como variável Terraform.
-  # O módulo networking usa isso para terraform_remote_state.
-  TF_VAR_terraform_state_bucket: ${{ secrets.TERRAFORM_STATE_BUCKET }}
 
   BUCKET_STATE: ${{ secrets.TERRAFORM_STATE_BUCKET }}
 
@@ -38,10 +35,6 @@ env:
 
 jobs:
 
-  # ----------------------------------------------------------
-  # PLAN - SECURITY
-  # ----------------------------------------------------------
-
   plan_security:
     name: Plan - Security
     if: github.event.inputs.action == 'plan'
@@ -49,7 +42,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: hashicorp/setup-terraform@v3
 
       - uses: aws-actions/configure-aws-credentials@v4
@@ -70,12 +62,10 @@ jobs:
 
       - name: Terraform Plan
         working-directory: terraform/environments/prod/security
-        run: terraform plan -var-file="terraform.tfvars"
+        run: |
+          terraform plan \
+            -var-file="terraform.tfvars"
 
-
-  # ----------------------------------------------------------
-  # PLAN - DATA
-  # ----------------------------------------------------------
 
   plan_data:
     name: Plan - Data
@@ -84,7 +74,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: hashicorp/setup-terraform@v3
 
       - uses: aws-actions/configure-aws-credentials@v4
@@ -105,12 +94,10 @@ jobs:
 
       - name: Terraform Plan
         working-directory: terraform/environments/prod/data
-        run: terraform plan -var-file="terraform.tfvars"
+        run: |
+          terraform plan \
+            -var-file="terraform.tfvars"
 
-
-  # ----------------------------------------------------------
-  # PLAN - PLATFORM
-  # ----------------------------------------------------------
 
   plan_platform:
     name: Plan - Platform
@@ -119,7 +106,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: hashicorp/setup-terraform@v3
 
       - uses: aws-actions/configure-aws-credentials@v4
@@ -140,12 +126,10 @@ jobs:
 
       - name: Terraform Plan
         working-directory: terraform/environments/prod/platform
-        run: terraform plan -var-file="terraform.tfvars"
+        run: |
+          terraform plan \
+            -var-file="terraform.tfvars"
 
-
-  # ----------------------------------------------------------
-  # PLAN - COMPUTE
-  # ----------------------------------------------------------
 
   plan_compute:
     name: Plan - Compute
@@ -154,7 +138,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: hashicorp/setup-terraform@v3
 
       - uses: aws-actions/configure-aws-credentials@v4
@@ -175,12 +158,10 @@ jobs:
 
       - name: Terraform Plan
         working-directory: terraform/environments/prod/compute
-        run: terraform plan -var-file="terraform.tfvars"
+        run: |
+          terraform plan \
+            -var-file="terraform.tfvars"
 
-
-  # ----------------------------------------------------------
-  # PLAN - NETWORKING
-  # ----------------------------------------------------------
 
   plan_networking:
     name: Plan - Networking
@@ -195,7 +176,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: hashicorp/setup-terraform@v3
 
       - uses: aws-actions/configure-aws-credentials@v4
@@ -216,16 +196,15 @@ jobs:
 
       - name: Terraform Plan
         working-directory: terraform/environments/prod/networking
-        run: terraform plan -var-file="terraform.tfvars"
+        run: |
+          terraform plan \
+            -var-file="terraform.tfvars" \
+            -var="terraform_state_bucket=$BUCKET_STATE"
 
 
 # ============================================================
 # APPLY
 # ============================================================
-
-  # ----------------------------------------------------------
-  # APPLY - SECURITY
-  # ----------------------------------------------------------
 
   apply_security:
     name: Apply - Security
@@ -234,7 +213,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: hashicorp/setup-terraform@v3
 
       - uses: aws-actions/configure-aws-credentials@v4
@@ -255,12 +233,11 @@ jobs:
 
       - name: Terraform Apply
         working-directory: terraform/environments/prod/security
-        run: terraform apply -var-file="terraform.tfvars" -auto-approve
+        run: |
+          terraform apply \
+            -var-file="terraform.tfvars" \
+            -auto-approve
 
-
-  # ----------------------------------------------------------
-  # APPLY - DATA
-  # ----------------------------------------------------------
 
   apply_data:
     name: Apply - Data
@@ -270,7 +247,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: hashicorp/setup-terraform@v3
 
       - uses: aws-actions/configure-aws-credentials@v4
@@ -291,12 +267,11 @@ jobs:
 
       - name: Terraform Apply
         working-directory: terraform/environments/prod/data
-        run: terraform apply -var-file="terraform.tfvars" -auto-approve
+        run: |
+          terraform apply \
+            -var-file="terraform.tfvars" \
+            -auto-approve
 
-
-  # ----------------------------------------------------------
-  # APPLY - PLATFORM
-  # ----------------------------------------------------------
 
   apply_platform:
     name: Apply - Platform
@@ -306,7 +281,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: hashicorp/setup-terraform@v3
 
       - uses: aws-actions/configure-aws-credentials@v4
@@ -327,12 +301,11 @@ jobs:
 
       - name: Terraform Apply
         working-directory: terraform/environments/prod/platform
-        run: terraform apply -var-file="terraform.tfvars" -auto-approve
+        run: |
+          terraform apply \
+            -var-file="terraform.tfvars" \
+            -auto-approve
 
-
-  # ----------------------------------------------------------
-  # APPLY - COMPUTE
-  # ----------------------------------------------------------
 
   apply_compute:
     name: Apply - Compute
@@ -342,7 +315,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: hashicorp/setup-terraform@v3
 
       - uses: aws-actions/configure-aws-credentials@v4
@@ -363,12 +335,11 @@ jobs:
 
       - name: Terraform Apply
         working-directory: terraform/environments/prod/compute
-        run: terraform apply -var-file="terraform.tfvars" -auto-approve
+        run: |
+          terraform apply \
+            -var-file="terraform.tfvars" \
+            -auto-approve
 
-
-  # ----------------------------------------------------------
-  # APPLY - NETWORKING
-  # ----------------------------------------------------------
 
   apply_networking:
     name: Apply - Networking
@@ -382,7 +353,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: hashicorp/setup-terraform@v3
 
       - uses: aws-actions/configure-aws-credentials@v4
@@ -403,16 +373,16 @@ jobs:
 
       - name: Terraform Apply
         working-directory: terraform/environments/prod/networking
-        run: terraform apply -var-file="terraform.tfvars" -auto-approve
+        run: |
+          terraform apply \
+            -var-file="terraform.tfvars" \
+            -var="terraform_state_bucket=$BUCKET_STATE" \
+            -auto-approve
 
 
 # ============================================================
 # DESTROY
 # ============================================================
-
-  # ----------------------------------------------------------
-  # DESTROY - NETWORKING
-  # ----------------------------------------------------------
 
   destroy_networking:
     name: Destroy - Networking
@@ -421,7 +391,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: hashicorp/setup-terraform@v3
 
       - uses: aws-actions/configure-aws-credentials@v4
@@ -442,12 +411,12 @@ jobs:
 
       - name: Terraform Destroy
         working-directory: terraform/environments/prod/networking
-        run: terraform destroy -var-file="terraform.tfvars" -auto-approve
+        run: |
+          terraform destroy \
+            -var-file="terraform.tfvars" \
+            -var="terraform_state_bucket=$BUCKET_STATE" \
+            -auto-approve
 
-
-  # ----------------------------------------------------------
-  # DESTROY - DATA
-  # ----------------------------------------------------------
 
   destroy_data:
     name: Destroy - Data
@@ -457,7 +426,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: hashicorp/setup-terraform@v3
 
       - uses: aws-actions/configure-aws-credentials@v4
@@ -478,12 +446,11 @@ jobs:
 
       - name: Terraform Destroy
         working-directory: terraform/environments/prod/data
-        run: terraform destroy -var-file="terraform.tfvars" -auto-approve
+        run: |
+          terraform destroy \
+            -var-file="terraform.tfvars" \
+            -auto-approve
 
-
-  # ----------------------------------------------------------
-  # DESTROY - PLATFORM
-  # ----------------------------------------------------------
 
   destroy_platform:
     name: Destroy - Platform
@@ -493,7 +460,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: hashicorp/setup-terraform@v3
 
       - uses: aws-actions/configure-aws-credentials@v4
@@ -514,12 +480,11 @@ jobs:
 
       - name: Terraform Destroy
         working-directory: terraform/environments/prod/platform
-        run: terraform destroy -var-file="terraform.tfvars" -auto-approve
+        run: |
+          terraform destroy \
+            -var-file="terraform.tfvars" \
+            -auto-approve
 
-
-  # ----------------------------------------------------------
-  # DESTROY - COMPUTE
-  # ----------------------------------------------------------
 
   destroy_compute:
     name: Destroy - Compute
@@ -529,7 +494,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: hashicorp/setup-terraform@v3
 
       - uses: aws-actions/configure-aws-credentials@v4
@@ -550,12 +514,11 @@ jobs:
 
       - name: Terraform Destroy
         working-directory: terraform/environments/prod/compute
-        run: terraform destroy -var-file="terraform.tfvars" -auto-approve
+        run: |
+          terraform destroy \
+            -var-file="terraform.tfvars" \
+            -auto-approve
 
-
-  # ----------------------------------------------------------
-  # DESTROY - SECURITY
-  # ----------------------------------------------------------
 
   destroy_security:
     name: Destroy - Security
@@ -569,7 +532,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: hashicorp/setup-terraform@v3
 
       - uses: aws-actions/configure-aws-credentials@v4
@@ -590,4 +552,7 @@ jobs:
 
       - name: Terraform Destroy
         working-directory: terraform/environments/prod/security
-        run: terraform destroy -var-file="terraform.tfvars" -auto-approve
+        run: |
+          terraform destroy \
+            -var-file="terraform.tfvars" \
+            -auto-approve

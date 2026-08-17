@@ -13,15 +13,10 @@ provider "aws" {
   region = var.aws_region
 }
 
-data "terraform_remote_state" "data" {
-  backend = "s3"
 
-  config = {
-    bucket = var.terraform_state_bucket
-    key    = "prod/data/terraform.tfstate"
-    region = var.aws_region
-  }
-}
+# ============================================================
+# REMOTE STATE - DATA
+# ============================================================
 
 data "terraform_remote_state" "data" {
   backend = "s3"
@@ -32,6 +27,11 @@ data "terraform_remote_state" "data" {
     region = var.aws_region
   }
 }
+
+
+# ============================================================
+# REMOTE STATE - COMPUTE
+# ============================================================
 
 data "terraform_remote_state" "compute" {
   backend = "s3"
@@ -43,13 +43,20 @@ data "terraform_remote_state" "compute" {
   }
 }
 
+
+# ============================================================
+# NETWORKING MODULE
+# ============================================================
+
 module "networking" {
   source = "../../../modules/networking"
 
-  eks_node_security_group = data.terraform_remote_state.compute.outputs.node_security_group_id
+  eks_node_security_group = data.terraform_remote_state.compute.outputs.cluster_security_group_id
 
-  rds_instances = values(
-    data.terraform_remote_state.data.outputs.rds_instance_identifiers
+  rds_instance_identifiers = toset(
+    values(
+      data.terraform_remote_state.data.outputs.rds_instance_identifiers
+    )
   )
 
   redis_cluster_id = data.terraform_remote_state.data.outputs.redis_cluster_id

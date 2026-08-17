@@ -1,11 +1,16 @@
 data "aws_db_instance" "databases" {
-  for_each               = toset(var.rds_instance_identifiers)
+  for_each               = var.rds_instance_identifiers
   db_instance_identifier = each.key
 }
 
 data "aws_elasticache_cluster" "redis" {
   cluster_id = var.redis_cluster_id
 }
+
+
+# ============================================================
+# POSTGRES
+# ============================================================
 
 resource "aws_vpc_security_group_ingress_rule" "postgres" {
   for_each = data.aws_db_instance.databases
@@ -18,11 +23,13 @@ resource "aws_vpc_security_group_ingress_rule" "postgres" {
   to_port     = 5432
 }
 
-resource "aws_vpc_security_group_ingress_rule" "redis" {
-  security_group_id = tolist(
-    data.aws_elasticache_cluster.redis.security_group_ids
-  )[0]
 
+# ============================================================
+# REDIS
+# ============================================================
+
+resource "aws_vpc_security_group_ingress_rule" "redis" {
+  security_group_id            = tolist(data.aws_elasticache_cluster.redis.security_group_ids)[0]
   referenced_security_group_id = var.eks_node_security_group
 
   ip_protocol = "tcp"
