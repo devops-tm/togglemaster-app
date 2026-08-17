@@ -55,7 +55,7 @@ resource "aws_db_instance" "postgres" {
   allocated_storage = var.allocated_storage
   storage_type      = "gp2"
 
-  db_name  = each.value.db_name
+  db_name = each.key == "flag" ? "flagdb" : each.key
   username = local.db_creds[each.key]["username"]
   password = local.db_creds[each.key]["password"]
 

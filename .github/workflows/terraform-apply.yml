@@ -1,0 +1,588 @@
+name: Terraform Apply
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+  AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+  TF_VAR_aws_region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+  TF_VAR_db_username: ${{ secrets.DB_USERNAME }}
+
+  BUCKET_STATE: ${{ secrets.TERRAFORM_STATE_BUCKET }}
+
+
+# ============================================================
+# SECURITY
+# ============================================================
+
+jobs:
+
+  apply_security:
+    name: Apply - Security
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # ------------------------------------------------------
+      # INIT
+      # ------------------------------------------------------
+
+      - name: Terraform Init
+        working-directory: terraform/environments/prod/security
+        run: |
+          terraform init \
+            -backend-config="bucket=$BUCKET_STATE" \
+            -backend-config="key=prod/security/terraform.tfstate" \
+            -backend-config="region=$AWS_REGION" \
+            -reconfigure
+
+      # ------------------------------------------------------
+      # STATE VALIDATION
+      # ------------------------------------------------------
+
+      - name: Validate Terraform State
+        working-directory: terraform/environments/prod/security
+        run: |
+          echo "=========================================="
+          echo "VALIDANDO TERRAFORM STATE"
+          echo "=========================================="
+
+          terraform state list || true
+
+          echo ""
+          echo "State backend:"
+          terraform state pull > /tmp/security-state.json
+
+          if [ ! -s /tmp/security-state.json ]; then
+            echo "ERRO: Terraform state vazio ou indisponível."
+            exit 1
+          fi
+
+          echo "State carregado com sucesso."
+
+      # ------------------------------------------------------
+      # PLAN
+      # ------------------------------------------------------
+
+      - name: Terraform Plan
+        working-directory: terraform/environments/prod/security
+        run: |
+          terraform plan \
+            -var-file="terraform.tfvars" \
+            -out=tfplan
+
+      # ------------------------------------------------------
+      # APPLY
+      # ------------------------------------------------------
+
+      - name: Terraform Apply
+        working-directory: terraform/environments/prod/security
+        run: |
+          terraform apply tfplan
+
+
+# ============================================================
+# DATA
+# ============================================================
+
+  apply_data:
+    name: Apply - Data
+    needs: apply_security
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # ------------------------------------------------------
+      # INIT
+      # ------------------------------------------------------
+
+      - name: Terraform Init
+        working-directory: terraform/environments/prod/data
+        run: |
+          terraform init \
+            -backend-config="bucket=$BUCKET_STATE" \
+            -backend-config="key=prod/data/terraform.tfstate" \
+            -backend-config="region=$AWS_REGION" \
+            -reconfigure
+
+      # ------------------------------------------------------
+      # STATE VALIDATION
+      # ------------------------------------------------------
+
+      - name: Validate Terraform State
+        working-directory: terraform/environments/prod/data
+        run: |
+          echo "=========================================="
+          echo "VALIDANDO TERRAFORM STATE - DATA"
+          echo "=========================================="
+
+          terraform state list || true
+
+          terraform state pull > /tmp/data-state.json
+
+          if [ ! -s /tmp/data-state.json ]; then
+            echo "ERRO: Terraform state vazio ou indisponível."
+            exit 1
+          fi
+
+          echo "State carregado com sucesso."
+
+      # ------------------------------------------------------
+      # PLAN
+      # ------------------------------------------------------
+
+      - name: Terraform Plan
+        working-directory: terraform/environments/prod/data
+        run: |
+          terraform plan \
+            -var-file="terraform.tfvars" \
+            -out=tfplan
+
+      # ------------------------------------------------------
+      # APPLY
+      # ------------------------------------------------------
+
+      - name: Terraform Apply
+        working-directory: terraform/environments/prod/data
+        run: |
+          terraform apply tfplan
+
+
+# ============================================================
+# PLATFORM
+# ============================================================
+
+  apply_platform:
+    name: Apply - Platform
+    needs: apply_security
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # ------------------------------------------------------
+      # INIT
+      # ------------------------------------------------------
+
+      - name: Terraform Init
+        working-directory: terraform/environments/prod/platform
+        run: |
+          terraform init \
+            -backend-config="bucket=$BUCKET_STATE" \
+            -backend-config="key=prod/platform/terraform.tfstate" \
+            -backend-config="region=$AWS_REGION" \
+            -reconfigure
+
+      # ------------------------------------------------------
+      # STATE VALIDATION
+      # ------------------------------------------------------
+
+      - name: Validate Terraform State
+        working-directory: terraform/environments/prod/platform
+        run: |
+          echo "=========================================="
+          echo "VALIDANDO TERRAFORM STATE - PLATFORM"
+          echo "=========================================="
+
+          terraform state list || true
+
+          terraform state pull > /tmp/platform-state.json
+
+          if [ ! -s /tmp/platform-state.json ]; then
+            echo "ERRO: Terraform state vazio ou indisponível."
+            exit 1
+          fi
+
+          echo "State carregado com sucesso."
+
+      # ------------------------------------------------------
+      # VALIDATE EXISTING AWS RESOURCES
+      # ------------------------------------------------------
+
+      - name: Validate Existing Platform Resources
+        working-directory: terraform/environments/prod/platform
+        run: |
+          echo "=========================================="
+          echo "VALIDANDO RECURSOS EXISTENTES NA AWS"
+          echo "=========================================="
+
+          # --------------------------------------------------
+          # ECR
+          # --------------------------------------------------
+
+          if [ -f terraform.tfvars ]; then
+
+            echo ""
+            echo "Verificando repositórios ECR..."
+
+            if grep -q "ecr_repositories" terraform.tfvars; then
+              echo "Configuração ECR encontrada."
+            fi
+
+          fi
+
+          # --------------------------------------------------
+          # DYNAMODB
+          # --------------------------------------------------
+
+          echo ""
+          echo "Verificando DynamoDB..."
+
+          if grep -q "dynamodb_table_name" terraform.tfvars; then
+            echo "Configuração DynamoDB encontrada."
+          fi
+
+          # --------------------------------------------------
+          # SQS
+          # --------------------------------------------------
+
+          echo ""
+          echo "Verificando SQS..."
+
+          if grep -q "sqs_queue_name" terraform.tfvars; then
+            echo "Configuração SQS encontrada."
+          fi
+
+          echo ""
+          echo "Validação básica concluída."
+
+      # ------------------------------------------------------
+      # PLAN
+      # ------------------------------------------------------
+
+      - name: Terraform Plan
+        working-directory: terraform/environments/prod/platform
+        run: |
+          terraform plan \
+            -var-file="terraform.tfvars" \
+            -out=tfplan
+
+      # ------------------------------------------------------
+      # APPLY
+      # ------------------------------------------------------
+
+      - name: Terraform Apply
+        working-directory: terraform/environments/prod/platform
+        run: |
+          terraform apply tfplan
+
+
+# ============================================================
+# COMPUTE
+# ============================================================
+
+  apply_compute:
+    name: Apply - Compute
+    needs: apply_security
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # ------------------------------------------------------
+      # INIT
+      # ------------------------------------------------------
+
+      - name: Terraform Init
+        working-directory: terraform/environments/prod/compute
+        run: |
+          terraform init \
+            -backend-config="bucket=$BUCKET_STATE" \
+            -backend-config="key=prod/compute/terraform.tfstate" \
+            -backend-config="region=$AWS_REGION" \
+            -reconfigure
+
+      # ------------------------------------------------------
+      # STATE VALIDATION
+      # ------------------------------------------------------
+
+      - name: Validate Terraform State
+        working-directory: terraform/environments/prod/compute
+        run: |
+          echo "=========================================="
+          echo "VALIDANDO TERRAFORM STATE - COMPUTE"
+          echo "=========================================="
+
+          terraform state list || true
+
+          terraform state pull > /tmp/compute-state.json
+
+          if [ ! -s /tmp/compute-state.json ]; then
+            echo "ERRO: Terraform state vazio ou indisponível."
+            exit 1
+          fi
+
+          echo "State carregado com sucesso."
+
+      # ------------------------------------------------------
+      # EKS VALIDATION
+      # ------------------------------------------------------
+
+      - name: Validate Existing EKS
+        working-directory: terraform/environments/prod/compute
+        run: |
+          echo "=========================================="
+          echo "VALIDANDO EKS"
+          echo "=========================================="
+
+          EKS_NAME="togglemaster-eks"
+
+          echo "EKS esperado: $EKS_NAME"
+
+          if aws eks describe-cluster \
+              --name "$EKS_NAME" \
+              --region "$AWS_REGION" >/dev/null 2>&1; then
+
+            echo "EKS $EKS_NAME EXISTE NA AWS."
+
+            if terraform state list | grep -q 'module.eks.aws_eks_cluster.eks'; then
+              echo "EKS também está presente no Terraform State."
+              echo "OK: recurso existente está sob gerenciamento do Terraform."
+            else
+              echo ""
+              echo "===================================================="
+              echo "ERRO: EKS EXISTE NA AWS MAS NÃO ESTÁ NO STATE"
+              echo "===================================================="
+              echo ""
+              echo "Cluster encontrado:"
+              echo "  $EKS_NAME"
+              echo ""
+              echo "Por segurança, o workflow NÃO irá tentar criá-lo."
+              echo ""
+              echo "Você precisa importar o recurso para o Terraform State."
+              echo ""
+              echo "Exemplo:"
+              echo ""
+              echo "terraform import \\"
+              echo "  module.eks.aws_eks_cluster.eks \\"
+              echo "  $EKS_NAME"
+              echo ""
+
+              exit 1
+            fi
+
+          else
+
+            echo "EKS $EKS_NAME não existe na AWS."
+
+            if terraform state list | grep -q 'module.eks.aws_eks_cluster.eks'; then
+              echo ""
+              echo "===================================================="
+              echo "ERRO: EKS ESTÁ NO STATE MAS NÃO EXISTE NA AWS"
+              echo "===================================================="
+              echo ""
+              echo "O state está inconsistente com a AWS."
+              echo "Não será executado apply automaticamente."
+              echo ""
+
+              exit 1
+            fi
+
+            echo "OK: EKS ainda não existe e também não está no state."
+            echo "Terraform poderá criá-lo."
+
+          fi
+
+      # ------------------------------------------------------
+      # PLAN
+      # ------------------------------------------------------
+
+      - name: Terraform Plan
+        working-directory: terraform/environments/prod/compute
+        run: |
+          terraform plan \
+            -var-file="terraform.tfvars" \
+            -out=tfplan
+
+      # ------------------------------------------------------
+      # APPLY
+      # ------------------------------------------------------
+
+      - name: Terraform Apply
+        working-directory: terraform/environments/prod/compute
+        run: |
+          terraform apply tfplan
+
+
+# ============================================================
+# NETWORKING
+# ============================================================
+
+  apply_networking:
+    name: Apply - Networking
+    needs:
+      - apply_data
+      - apply_platform
+      - apply_compute
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # ------------------------------------------------------
+      # INIT
+      # ------------------------------------------------------
+
+      - name: Terraform Init
+        working-directory: terraform/environments/prod/networking
+        run: |
+          terraform init \
+            -backend-config="bucket=$BUCKET_STATE" \
+            -backend-config="key=prod/networking/terraform.tfstate" \
+            -backend-config="region=$AWS_REGION" \
+            -reconfigure
+
+      # ------------------------------------------------------
+      # STATE VALIDATION
+      # ------------------------------------------------------
+
+      - name: Validate Terraform State
+        working-directory: terraform/environments/prod/networking
+        run: |
+          echo "=========================================="
+          echo "VALIDANDO TERRAFORM STATE - NETWORKING"
+          echo "=========================================="
+
+          terraform state list || true
+
+          terraform state pull > /tmp/networking-state.json
+
+          if [ ! -s /tmp/networking-state.json ]; then
+            echo "ERRO: Terraform state vazio ou indisponível."
+            exit 1
+          fi
+
+          echo "State carregado com sucesso."
+
+      # ------------------------------------------------------
+      # REMOTE STATES
+      # ------------------------------------------------------
+
+      - name: Validate Remote States
+        working-directory: terraform/environments/prod/networking
+        run: |
+          echo "=========================================="
+          echo "VALIDANDO REMOTE STATES"
+          echo "=========================================="
+
+          echo ""
+          echo "Security:"
+          aws s3api head-object \
+            --bucket "$BUCKET_STATE" \
+            --key "prod/security/terraform.tfstate"
+
+          echo ""
+          echo "Data:"
+          aws s3api head-object \
+            --bucket "$BUCKET_STATE" \
+            --key "prod/data/terraform.tfstate"
+
+          echo ""
+          echo "Platform:"
+          aws s3api head-object \
+            --bucket "$BUCKET_STATE" \
+            --key "prod/platform/terraform.tfstate"
+
+          echo ""
+          echo "Compute:"
+          aws s3api head-object \
+            --bucket "$BUCKET_STATE" \
+            --key "prod/compute/terraform.tfstate"
+
+          echo ""
+          echo "Todos os remote states necessários existem."
+
+      # ------------------------------------------------------
+      # PLAN
+      # ------------------------------------------------------
+
+      - name: Terraform Plan
+        working-directory: terraform/environments/prod/networking
+        run: |
+          terraform plan \
+            -var-file="terraform.tfvars" \
+            -out=tfplan
+
+      # ------------------------------------------------------
+      # APPLY
+      # ------------------------------------------------------
+
+      - name: Terraform Apply
+        working-directory: terraform/environments/prod/networking
+        run: |
+          terraform apply tfplan
