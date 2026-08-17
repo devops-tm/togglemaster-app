@@ -1,16 +1,10 @@
 variable "aws_region" {
-  description = "Regiao da AWS onde os recursos serao provisionados"
+  description = "Região AWS"
   type        = string
 }
 
 variable "db_username" {
   description = "Usuário administrador do PostgreSQL"
-  type        = string
-  sensitive   = true
-}
-
-variable "db_password" {
-  description = "Senha do banco de dados injetada pelo Secrets Manager"
   type        = string
   sensitive   = true
 }
@@ -23,3 +17,20 @@ variable "databases" {
   }))
 }
 
+variable "instance_class" {
+  description = "Classe da instância RDS"
+  type        = string
+  default     = "db.t3.micro"
+}
+
+variable "allocated_storage" {
+  description = "Tamanho do storage em GB"
+  type        = number
+  default     = 20
+}
+
+variable "backup_retention_period" {
+  description = "Período de retenção de backup em dias"
+  type        = number
+  default     = 0
+}

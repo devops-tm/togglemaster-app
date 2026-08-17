@@ -22,7 +22,7 @@ jobs:
 
       - name: Build Docker Image
         working-directory: ${{ inputs.service-path }}
-        run: docker build -t ${{ inputs.service-name }} .
+        run: docker build -t ${{ inputs.service-name }}:latest .
 
       - name: Run Trivy vulnerability scanner in image mode
         uses: aquasecurity/trivy-action@master

@@ -165,3 +165,5 @@ O acesso dos clientes ocorre através do **NGINX Ingress Controller**, publicado
 - SCA e Container Scan: Trivy
 - Vantagens: Fornece um dashboard web interativo para gerenciar a dívida técnica, acompanhar o histórico de cobertura e visualizar as falhas de segurança de forma centralizada.
 - Desvantagens: Requer a criação de uma conta no SonarCloud e a configuração de tokens de integração nos repositórios. O pipeline sofre um acréscimo no tempo total de execução devido à comunicação com a API da plataforma.
+
+- O AWS Secrets Manager foi inicialmente adotado, porém sua API CreateSecret é explicitamente negada pela política voc-cancel-cred do ambiente AWS Academy. Como alternativa compatível com o ambiente, foi adotado o AWS Systems Manager Parameter Store com parâmetros SecureString, protegidos por uma chave AWS KMS."

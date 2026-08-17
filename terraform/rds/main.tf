@@ -1,23 +1,21 @@
+# Data source para ler credenciais do SSM
+data "aws_ssm_parameter" "db_credentials" {
+  for_each = var.databases
+  name     = "/togglemaster/prod/${each.key}/credentials"
+}
+
+locals {
+  db_creds = {
+    for k, v in data.aws_ssm_parameter.db_credentials : k => jsondecode(v.value)
+  }
+}
+
+# Data source da VPC
 data "aws_vpc" "default" {
   default = true
 }
 
-data "aws_secretsmanager_secret" "db_secret" {
-  for_each = var.databases
-  name     = "togglemaster/prod/${each.key}-credentials"
-}
-
-data "aws_secretsmanager_secret_version" "db_secret_val" {
-  for_each  = var.databases
-  secret_id = data.aws_secretsmanager_secret.db_secret[each.key].id
-}
-
-locals  {
-  db_creds = {
-    for k, v in data.aws_secretsmanager_secret_version.db_secret_val : k => jsondecode(v.secret_string)
-  }
-}
-
+# Security Group para RDS
 resource "aws_security_group" "postgres" {
   for_each = var.databases
 
@@ -29,7 +27,7 @@ resource "aws_security_group" "postgres" {
     from_port   = 5432
     to_port     = 5432
     protocol    = "tcp"
-    cidr_blocks = []
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -38,8 +36,15 @@ resource "aws_security_group" "postgres" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
+  tags = {
+    Project     = "ToggleMaster"
+    Environment = "AWSAcademy"
+    Service     = each.key
+  }
 }
 
+# RDS Instances
 resource "aws_db_instance" "postgres" {
   for_each = var.databases
 
@@ -48,12 +53,12 @@ resource "aws_db_instance" "postgres" {
   engine         = "postgres"
   engine_version = "15"
 
-  instance_class    = "db.t3.micro"
-  allocated_storage = 20
+  instance_class    = var.instance_class
+  allocated_storage = var.allocated_storage
   storage_type      = "gp2"
 
   db_name  = each.value.db_name
-  username = var.db_username
+  username = local.db_creds[each.key]["username"]
   password = local.db_creds[each.key]["password"]
 
   publicly_accessible = false
@@ -65,7 +70,7 @@ resource "aws_db_instance" "postgres" {
   apply_immediately          = true
   auto_minor_version_upgrade = true
 
-  backup_retention_period = 0
+  backup_retention_period = var.backup_retention_period
 
   storage_encrypted = true
 

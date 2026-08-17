@@ -72,47 +72,59 @@ jobs:
           terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION" -reconfigure
           terraform ${{ github.event.inputs.action }} -auto-approve
 
-  data_infra:
-    name: RDS, ElastiCache e Secrets
+  security_infra:
+    name: Security (SSM Parameter Store)
     needs: setup
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
+      
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
+      
       - name: Mask sensitive strings in logs
         run: |
           echo "::add-mask::${{ secrets.AWS_SENSITIVE_IDENTITY }}"
-          
-      - name: Deploy Secrets Manager
+      
+      - name: Deploy SSM Parameters
         run: |
-          cd terraform/secrets
+          cd terraform/security
           terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION" -reconfigure
-          terraform ${{ github.event.inputs.action }} -auto-approve
+          terraform ${{ github.event.inputs.action }} -auto-approve  
 
-      - run: |
-          cat <<EOF > terraform/rds/secrets.auto.tfvars
-          db_username = "${{ secrets.POSTGRES_USER }}"
-          databases = {
-            auth      = { identifier = "rds-postgres-auth", db_name = "auth_db" }
-            flag      = { identifier = "rds-postgres-flag", db_name = "flags_db" }
-            targeting = { identifier = "rds-postgres-targeting", db_name = "targeting_db" }
-          }
-          EOF
+    data_infra:
+    name: RDS and ElastiCache
+    needs: [setup, security_infra]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Mask sensitive strings in logs
+        run: |
+          echo "::add-mask::${{ secrets.AWS_SENSITIVE_IDENTITY }}"
+  
+      
+      - name: Deploy RDS
+        run: |
           cd terraform/rds
           terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION" -reconfigure
           terraform ${{ github.event.inputs.action }} -auto-approve
-      - run: |
-          cat <<EOF > terraform/elasticache/secrets.auto.tfvars
-          cluster_id = "togglemaster-redis"
-          node_type  = "cache.t3.micro"
-          redis_port = 6379
-          EOF
+      
+      - name: Deploy ElastiCache
+        run: |
           cd terraform/elasticache
           terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION" -reconfigure
           terraform ${{ github.event.inputs.action }} -auto-approve

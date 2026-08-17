@@ -1,7 +1,7 @@
 terraform {
   backend "s3" {
     bucket         = "togglemaster-terraform-state"
-    key            = "elasticache/terraform.tfstate"
+    key            = "security/terraform.tfstate"
     encrypt        = true
     dynamodb_table = "terraform-locks"
   }
@@ -10,6 +10,10 @@ terraform {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.5"
     }
   }
 }

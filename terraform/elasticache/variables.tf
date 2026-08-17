@@ -1,25 +1,22 @@
 variable "aws_region" {
-  description = "Regiao da AWS onde os recursos serao provisionados"
+  description = "Região AWS"
   type        = string
 }
 
 variable "cluster_id" {
-  description = "Identificador do cluster Redis"
+  description = "Redis cluster ID"
   type        = string
+  default     = "togglemaster-redis"
 }
 
 variable "node_type" {
-  description = "Tipo de instancia do nó de cache"
+  description = "Redis node type"
   type        = string
+  default     = "cache.t3.micro"
 }
 
 variable "redis_port" {
-  description = "Porta de conexao do Redis"
+  description = "Redis port"
   type        = number
-}
-
-variable "redis_password" {
-  description = "Token de autenticacao do Redis injetado pelo Secrets Manager"
-  type        = string
-  sensitive   = true
+  default     = 6379
 }
