@@ -4,6 +4,7 @@ variable "aws_region" {
 }
 
 variable "terraform_state_bucket" {
-  description = "Bucket S3 utilizado para armazenar os Terraform States"
+  description = "Bucket S3 utilizado para armazenar os estados do Terraform"
   type        = string
+  sensitive   = true
 }

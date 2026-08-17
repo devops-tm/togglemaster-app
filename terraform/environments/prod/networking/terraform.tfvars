@@ -1,1 +1,1 @@
-terraform_state_bucket = "..."
+# Os recursos são obtidos através dos remote states.
