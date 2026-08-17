@@ -1,13 +1,11 @@
 output "rds_instance_identifiers" {
   description = "Identificadores das instâncias RDS"
 
-  value = {
-    for k, v in module.rds.rds_instance_identifiers :
-    k => v
-  }
+  value = module.rds.rds_instance_identifiers
 }
 
 output "redis_cluster_id" {
   description = "Identificador do cluster Redis"
-  value       = module.elasticache.redis_cluster_id
+
+  value = module.elasticache.redis_cluster_id
 }

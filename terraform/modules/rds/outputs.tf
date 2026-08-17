@@ -1,19 +1,5 @@
-output "rds_endpoints" {
-  value = {
-    for k, v in aws_db_instance.postgres :
-    k => v.endpoint
-  }
-}
-
-output "rds_databases" {
-  value = {
-    for k, v in aws_db_instance.postgres :
-    k => v.db_name
-  }
-}
-
 output "rds_instance_identifiers" {
-  description = "Identificadores das instancias RDS"
+  description = "Identificadores das instâncias RDS"
 
   value = {
     for k, v in aws_db_instance.postgres :
@@ -21,3 +7,20 @@ output "rds_instance_identifiers" {
   }
 }
 
+output "rds_endpoints" {
+  description = "Endpoints das instâncias RDS"
+
+  value = {
+    for k, v in aws_db_instance.postgres :
+    k => v.endpoint
+  }
+}
+
+output "rds_databases" {
+  description = "Nomes dos bancos de dados"
+
+  value = {
+    for k, v in aws_db_instance.postgres :
+    k => v.db_name
+  }
+}
