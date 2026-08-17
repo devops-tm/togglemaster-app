@@ -1,17 +1,12 @@
-name: Terraform Management
+name: Terraform Destroy
 
 on:
   workflow_dispatch:
     inputs:
-      action:
-        description: Ação do Terraform
+      confirm:
+        description: "Digite DESTROY para confirmar"
         required: true
-        default: plan
-        type: choice
-        options:
-          - plan
-          - apply
-          - destroy
+        type: string
 
 permissions:
   contents: read
@@ -20,7 +15,6 @@ env:
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
-
   AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
 
   TF_VAR_aws_region: ${{ secrets.AWS_REGION || 'us-east-1' }}
@@ -28,20 +22,24 @@ env:
 
   BUCKET_STATE: ${{ secrets.TERRAFORM_STATE_BUCKET }}
 
-
-# ============================================================
-# PLAN
-# ============================================================
-
 jobs:
 
-  plan_security:
-    name: Plan - Security
-    if: github.event.inputs.action == 'plan'
+  validate:
+    name: Validate
     runs-on: ubuntu-latest
 
     steps:
+      - name: Confirm
+        shell: bash
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "DESTROY" ]; then
+            echo "ERROR: confirmação inválida."
+            echo "Digite DESTROY para executar a destruição."
+            exit 1
+          fi
+
       - uses: actions/checkout@v4
+
       - uses: hashicorp/setup-terraform@v3
 
       - uses: aws-actions/configure-aws-credentials@v4
@@ -51,346 +49,31 @@ jobs:
           aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Terraform Init
-        working-directory: terraform/environments/prod/security
+      - name: Validate State Buckets
+        shell: bash
         run: |
-          terraform init \
-            -backend-config="bucket=$BUCKET_STATE" \
-            -backend-config="key=prod/security/terraform.tfstate" \
-            -backend-config="region=$AWS_REGION" \
-            -reconfigure
+          set -e
 
-      - name: Terraform Plan
-        working-directory: terraform/environments/prod/security
-        run: |
-          terraform plan \
-            -var-file="terraform.tfvars"
+          if [ -z "$BUCKET_STATE" ]; then
+            echo "ERROR: TERRAFORM_STATE_BUCKET não configurado."
+            exit 1
+          fi
 
+          aws s3api head-bucket \
+            --bucket "$BUCKET_STATE" \
+            --region "$AWS_REGION"
 
-  plan_data:
-    name: Plan - Data
-    if: github.event.inputs.action == 'plan'
-    runs-on: ubuntu-latest
+          echo "Terraform state bucket validado."
 
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Terraform Init
-        working-directory: terraform/environments/prod/data
-        run: |
-          terraform init \
-            -backend-config="bucket=$BUCKET_STATE" \
-            -backend-config="key=prod/data/terraform.tfstate" \
-            -backend-config="region=$AWS_REGION" \
-            -reconfigure
-
-      - name: Terraform Plan
-        working-directory: terraform/environments/prod/data
-        run: |
-          terraform plan \
-            -var-file="terraform.tfvars"
-
-
-  plan_platform:
-    name: Plan - Platform
-    if: github.event.inputs.action == 'plan'
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Terraform Init
-        working-directory: terraform/environments/prod/platform
-        run: |
-          terraform init \
-            -backend-config="bucket=$BUCKET_STATE" \
-            -backend-config="key=prod/platform/terraform.tfstate" \
-            -backend-config="region=$AWS_REGION" \
-            -reconfigure
-
-      - name: Terraform Plan
-        working-directory: terraform/environments/prod/platform
-        run: |
-          terraform plan \
-            -var-file="terraform.tfvars"
-
-
-  plan_compute:
-    name: Plan - Compute
-    if: github.event.inputs.action == 'plan'
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Terraform Init
-        working-directory: terraform/environments/prod/compute
-        run: |
-          terraform init \
-            -backend-config="bucket=$BUCKET_STATE" \
-            -backend-config="key=prod/compute/terraform.tfstate" \
-            -backend-config="region=$AWS_REGION" \
-            -reconfigure
-
-      - name: Terraform Plan
-        working-directory: terraform/environments/prod/compute
-        run: |
-          terraform plan \
-            -var-file="terraform.tfvars"
-
-
-  plan_networking:
-    name: Plan - Networking
-    if: github.event.inputs.action == 'plan'
-    needs:
-      - plan_security
-      - plan_data
-      - plan_platform
-      - plan_compute
-
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Terraform Init
-        working-directory: terraform/environments/prod/networking
-        run: |
-          terraform init \
-            -backend-config="bucket=$BUCKET_STATE" \
-            -backend-config="key=prod/networking/terraform.tfstate" \
-            -backend-config="region=$AWS_REGION" \
-            -reconfigure
-
-      - name: Terraform Plan
-        working-directory: terraform/environments/prod/networking
-        run: |
-          terraform plan \
-            -var-file="terraform.tfvars" \
-            -var="terraform_state_bucket=$BUCKET_STATE"
-
-
-# ============================================================
-# APPLY
-# ============================================================
-
-  apply_security:
-    name: Apply - Security
-    if: github.event.inputs.action == 'apply'
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Terraform Init
-        working-directory: terraform/environments/prod/security
-        run: |
-          terraform init \
-            -backend-config="bucket=$BUCKET_STATE" \
-            -backend-config="key=prod/security/terraform.tfstate" \
-            -backend-config="region=$AWS_REGION" \
-            -reconfigure
-
-      - name: Terraform Apply
-        working-directory: terraform/environments/prod/security
-        run: |
-          terraform apply \
-            -var-file="terraform.tfvars" \
-            -auto-approve
-
-
-  apply_data:
-    name: Apply - Data
-    if: github.event.inputs.action == 'apply'
-    needs: apply_security
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Terraform Init
-        working-directory: terraform/environments/prod/data
-        run: |
-          terraform init \
-            -backend-config="bucket=$BUCKET_STATE" \
-            -backend-config="key=prod/data/terraform.tfstate" \
-            -backend-config="region=$AWS_REGION" \
-            -reconfigure
-
-      - name: Terraform Apply
-        working-directory: terraform/environments/prod/data
-        run: |
-          terraform apply \
-            -var-file="terraform.tfvars" \
-            -auto-approve
-
-
-  apply_platform:
-    name: Apply - Platform
-    if: github.event.inputs.action == 'apply'
-    needs: apply_security
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Terraform Init
-        working-directory: terraform/environments/prod/platform
-        run: |
-          terraform init \
-            -backend-config="bucket=$BUCKET_STATE" \
-            -backend-config="key=prod/platform/terraform.tfstate" \
-            -backend-config="region=$AWS_REGION" \
-            -reconfigure
-
-      - name: Terraform Apply
-        working-directory: terraform/environments/prod/platform
-        run: |
-          terraform apply \
-            -var-file="terraform.tfvars" \
-            -auto-approve
-
-
-  apply_compute:
-    name: Apply - Compute
-    if: github.event.inputs.action == 'apply'
-    needs: apply_security
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Terraform Init
-        working-directory: terraform/environments/prod/compute
-        run: |
-          terraform init \
-            -backend-config="bucket=$BUCKET_STATE" \
-            -backend-config="key=prod/compute/terraform.tfstate" \
-            -backend-config="region=$AWS_REGION" \
-            -reconfigure
-
-      - name: Terraform Apply
-        working-directory: terraform/environments/prod/compute
-        run: |
-          terraform apply \
-            -var-file="terraform.tfvars" \
-            -auto-approve
-
-
-  apply_networking:
-    name: Apply - Networking
-    if: github.event.inputs.action == 'apply'
-    needs:
-      - apply_data
-      - apply_platform
-      - apply_compute
-
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Terraform Init
-        working-directory: terraform/environments/prod/networking
-        run: |
-          terraform init \
-            -backend-config="bucket=$BUCKET_STATE" \
-            -backend-config="key=prod/networking/terraform.tfstate" \
-            -backend-config="region=$AWS_REGION" \
-            -reconfigure
-
-      - name: Terraform Apply
-        working-directory: terraform/environments/prod/networking
-        run: |
-          terraform apply \
-            -var-file="terraform.tfvars" \
-            -var="terraform_state_bucket=$BUCKET_STATE" \
-            -auto-approve
-
-
-# ============================================================
-# DESTROY
-# ============================================================
 
   destroy_networking:
-    name: Destroy - Networking
-    if: github.event.inputs.action == 'destroy'
+    name: Networking
+    needs: validate
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+
       - uses: hashicorp/setup-terraform@v3
 
       - uses: aws-actions/configure-aws-credentials@v4
@@ -400,7 +83,7 @@ jobs:
           aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Terraform Init
+      - name: Init
         working-directory: terraform/environments/prod/networking
         run: |
           terraform init \
@@ -409,23 +92,49 @@ jobs:
             -backend-config="region=$AWS_REGION" \
             -reconfigure
 
-      - name: Terraform Destroy
+      - name: Validate
+        working-directory: terraform/environments/prod/networking
+        run: terraform validate
+
+      - name: State Check
+        working-directory: terraform/environments/prod/networking
+        shell: bash
+        run: |
+          set -e
+
+          if ! terraform state list >/dev/null 2>&1; then
+            echo "ERROR: Terraform state não pôde ser carregado."
+            exit 1
+          fi
+
+          echo "Terraform state validado."
+
+          terraform state list
+
+      - name: Plan Destroy
         working-directory: terraform/environments/prod/networking
         run: |
-          terraform destroy \
+          terraform plan \
+            -destroy \
             -var-file="terraform.tfvars" \
-            -var="terraform_state_bucket=$BUCKET_STATE" \
-            -auto-approve
+            -out=destroy.tfplan
+
+      - name: Destroy
+        working-directory: terraform/environments/prod/networking
+        run: |
+          terraform apply \
+            -auto-approve \
+            destroy.tfplan
 
 
   destroy_data:
-    name: Destroy - Data
-    if: github.event.inputs.action == 'destroy'
+    name: Data
     needs: destroy_networking
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+
       - uses: hashicorp/setup-terraform@v3
 
       - uses: aws-actions/configure-aws-credentials@v4
@@ -435,7 +144,7 @@ jobs:
           aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Terraform Init
+      - name: Init
         working-directory: terraform/environments/prod/data
         run: |
           terraform init \
@@ -444,22 +153,49 @@ jobs:
             -backend-config="region=$AWS_REGION" \
             -reconfigure
 
-      - name: Terraform Destroy
+      - name: Validate
+        working-directory: terraform/environments/prod/data
+        run: terraform validate
+
+      - name: State Check
+        working-directory: terraform/environments/prod/data
+        shell: bash
+        run: |
+          set -e
+
+          if ! terraform state list >/dev/null 2>&1; then
+            echo "ERROR: Terraform state não pôde ser carregado."
+            exit 1
+          fi
+
+          echo "Terraform state validado."
+
+          terraform state list
+
+      - name: Plan Destroy
         working-directory: terraform/environments/prod/data
         run: |
-          terraform destroy \
+          terraform plan \
+            -destroy \
             -var-file="terraform.tfvars" \
-            -auto-approve
+            -out=destroy.tfplan
+
+      - name: Destroy
+        working-directory: terraform/environments/prod/data
+        run: |
+          terraform apply \
+            -auto-approve \
+            destroy.tfplan
 
 
   destroy_platform:
-    name: Destroy - Platform
-    if: github.event.inputs.action == 'destroy'
+    name: Platform
     needs: destroy_networking
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+
       - uses: hashicorp/setup-terraform@v3
 
       - uses: aws-actions/configure-aws-credentials@v4
@@ -469,7 +205,7 @@ jobs:
           aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Terraform Init
+      - name: Init
         working-directory: terraform/environments/prod/platform
         run: |
           terraform init \
@@ -478,22 +214,49 @@ jobs:
             -backend-config="region=$AWS_REGION" \
             -reconfigure
 
-      - name: Terraform Destroy
+      - name: Validate
+        working-directory: terraform/environments/prod/platform
+        run: terraform validate
+
+      - name: State Check
+        working-directory: terraform/environments/prod/platform
+        shell: bash
+        run: |
+          set -e
+
+          if ! terraform state list >/dev/null 2>&1; then
+            echo "ERROR: Terraform state não pôde ser carregado."
+            exit 1
+          fi
+
+          echo "Terraform state validado."
+
+          terraform state list
+
+      - name: Plan Destroy
         working-directory: terraform/environments/prod/platform
         run: |
-          terraform destroy \
+          terraform plan \
+            -destroy \
             -var-file="terraform.tfvars" \
-            -auto-approve
+            -out=destroy.tfplan
+
+      - name: Destroy
+        working-directory: terraform/environments/prod/platform
+        run: |
+          terraform apply \
+            -auto-approve \
+            destroy.tfplan
 
 
   destroy_compute:
-    name: Destroy - Compute
-    if: github.event.inputs.action == 'destroy'
+    name: Compute
     needs: destroy_networking
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+
       - uses: hashicorp/setup-terraform@v3
 
       - uses: aws-actions/configure-aws-credentials@v4
@@ -503,7 +266,7 @@ jobs:
           aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Terraform Init
+      - name: Init
         working-directory: terraform/environments/prod/compute
         run: |
           terraform init \
@@ -512,26 +275,52 @@ jobs:
             -backend-config="region=$AWS_REGION" \
             -reconfigure
 
-      - name: Terraform Destroy
+      - name: Validate
+        working-directory: terraform/environments/prod/compute
+        run: terraform validate
+
+      - name: State Check
+        working-directory: terraform/environments/prod/compute
+        shell: bash
+        run: |
+          set -e
+
+          if ! terraform state list >/dev/null 2>&1; then
+            echo "ERROR: Terraform state não pôde ser carregado."
+            exit 1
+          fi
+
+          echo "Terraform state validado."
+
+          terraform state list
+
+      - name: Plan Destroy
         working-directory: terraform/environments/prod/compute
         run: |
-          terraform destroy \
+          terraform plan \
+            -destroy \
             -var-file="terraform.tfvars" \
-            -auto-approve
+            -out=destroy.tfplan
+
+      - name: Destroy
+        working-directory: terraform/environments/prod/compute
+        run: |
+          terraform apply \
+            -auto-approve \
+            destroy.tfplan
 
 
   destroy_security:
-    name: Destroy - Security
-    if: github.event.inputs.action == 'destroy'
+    name: Security
     needs:
       - destroy_data
       - destroy_platform
       - destroy_compute
-
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+
       - uses: hashicorp/setup-terraform@v3
 
       - uses: aws-actions/configure-aws-credentials@v4
@@ -541,7 +330,7 @@ jobs:
           aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Terraform Init
+      - name: Init
         working-directory: terraform/environments/prod/security
         run: |
           terraform init \
@@ -550,9 +339,36 @@ jobs:
             -backend-config="region=$AWS_REGION" \
             -reconfigure
 
-      - name: Terraform Destroy
+      - name: Validate
+        working-directory: terraform/environments/prod/security
+        run: terraform validate
+
+      - name: State Check
+        working-directory: terraform/environments/prod/security
+        shell: bash
+        run: |
+          set -e
+
+          if ! terraform state list >/dev/null 2>&1; then
+            echo "ERROR: Terraform state não pôde ser carregado."
+            exit 1
+          fi
+
+          echo "Terraform state validado."
+
+          terraform state list
+
+      - name: Plan Destroy
         working-directory: terraform/environments/prod/security
         run: |
-          terraform destroy \
+          terraform plan \
+            -destroy \
             -var-file="terraform.tfvars" \
-            -auto-approve
+            -out=destroy.tfplan
+
+      - name: Destroy
+        working-directory: terraform/environments/prod/security
+        run: |
+          terraform apply \
+            -auto-approve \
+            destroy.tfplan
