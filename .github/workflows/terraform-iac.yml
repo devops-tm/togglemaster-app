@@ -1,4 +1,4 @@
-name: Terraform Managment
+name: Terraform Management
 
 on:
   workflow_dispatch:
@@ -25,7 +25,7 @@ env:
 
 jobs:
   setup:
-    name: Verify Backend S3
+    name: Setup
     runs-on: ubuntu-latest
     steps:
       - uses: aws-actions/configure-aws-credentials@v4
@@ -34,43 +34,22 @@ jobs:
           aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
-      - name: Mask sensitive strings in logs
+      
+      - name: Verify AWS and create bucket if needed
         run: |
-          echo "::add-mask::${{ secrets.AWS_SENSITIVE_IDENTITY }}"
-      - run: |
-          echo "Skipping explicit head-bucket check due to AWS Academy IAM restrictions. Terraform init will handle backend state interaction."
-
-  base_infra:
-    name: ECR and Serverless
-    needs: setup
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.AWS_REGION }}
-      - name: Mask sensitive strings in logs
-        run: |
-          echo "::add-mask::${{ secrets.AWS_SENSITIVE_IDENTITY }}"
-      - run: |
-          cat <<EOF > terraform/ecr/secrets.auto.tfvars
-          ecr_repositories = ["auth-service", "flag-service", "targeting-service", "evaluation-service", "analytics-service"]
-          EOF
-          cd terraform/ecr
-          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION" -reconfigure
-          terraform ${{ github.event.inputs.action }} -auto-approve
-      - run: |
-          cat <<EOF > terraform/serverless/secrets.auto.tfvars
-          sqs_queue_name      = "togglemaster-evaluation-events"
-          dynamodb_table_name = "ToggleMasterAnalytics"
-          EOF
-          cd terraform/serverless
-          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION" -reconfigure
-          terraform ${{ github.event.inputs.action }} -auto-approve
+          # Verificar se o bucket existe
+          if ! aws s3api head-bucket --bucket $BUCKET_STATE 2>/dev/null; then
+            echo "Bucket $BUCKET_STATE não existe. Criando..."
+            aws s3api create-bucket \
+              --bucket $BUCKET_STATE \
+              --region $AWS_REGION \
+              --create-bucket-configuration LocationConstraint=$AWS_REGION
+            aws s3api put-bucket-versioning \
+              --bucket $BUCKET_STATE \
+              --versioning-configuration Status=Enabled
+          else
+            echo "Bucket $BUCKET_STATE já existe."
+          fi
 
   security_infra:
     name: Security (SSM Parameter Store)
@@ -87,15 +66,11 @@ jobs:
           aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
       
-      - name: Mask sensitive strings in logs
-        run: |
-          echo "::add-mask::${{ secrets.AWS_SENSITIVE_IDENTITY }}"
-      
       - name: Deploy SSM Parameters
         run: |
           cd terraform/security
           terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION" -reconfigure
-          terraform ${{ github.event.inputs.action }} -auto-approve  
+          terraform ${{ github.event.inputs.action }} -auto-approve
 
   data_infra:
     name: RDS and ElastiCache
@@ -112,11 +87,6 @@ jobs:
           aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
       
-      - name: Mask sensitive strings in logs
-        run: |
-          echo "::add-mask::${{ secrets.AWS_SENSITIVE_IDENTITY }}"
-  
-      
       - name: Deploy RDS
         run: |
           cd terraform/rds
@@ -129,34 +99,53 @@ jobs:
           terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION" -reconfigure
           terraform ${{ github.event.inputs.action }} -auto-approve
 
-  compute_infra:
-    name: EKS Cluster
+  ecr_serverless:
+    name: ECR and Serverless
     needs: setup
     runs-on: ubuntu-latest
-    outputs:
-      eks_sg_id: ${{ steps.export_sg.outputs.EKS_SG }}
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
+      
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
-      - name: Mask sensitive strings in logs
+      
+      - name: Deploy ECR
         run: |
-          echo "::add-mask::${{ secrets.AWS_SENSITIVE_IDENTITY }}"
-      - run: |
+          cd terraform/ecr
+          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION" -reconfigure
+          terraform ${{ github.event.inputs.action }} -auto-approve
+      
+      - name: Deploy Serverless
+        run: |
+          cd terraform/serverless
+          terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION" -reconfigure
+          terraform ${{ github.event.inputs.action }} -auto-approve
+
+  compute_infra:
+    name: EKS Cluster
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Deploy EKS
+        run: |
           cd terraform/eks
           terraform init -backend-config="bucket=$BUCKET_STATE" -backend-config="region=$AWS_REGION" -reconfigure
           terraform ${{ github.event.inputs.action }} -auto-approve
-      - id: export_sg
-        if: ${{ github.event.inputs.action == 'apply' }}
-        run: |
-          cd terraform/eks
-          SG=$(terraform output -raw cluster_primary_security_group_id)
-          echo "EKS_SG=$SG" >> $GITHUB_OUTPUT
 
   networking_infra:
     name: Networking Integrations

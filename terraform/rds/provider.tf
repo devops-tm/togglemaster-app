@@ -1,9 +1,8 @@
 terraform {
   backend "s3" {
-    bucket         = "togglemaster-terraform-state"
-    key            = "rds/terraform.tfstate"
-    encrypt        = true
-    dynamodb_table = "terraform-locks"
+    bucket = "nome-do-seu-bucket"
+    key    = "eks/terraform.tfstate"
+    region = "sua-regiao-aqui"
   }
   
   required_providers {
