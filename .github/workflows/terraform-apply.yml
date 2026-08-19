@@ -1,4 +1,3 @@
-```yaml
 name: Terraform Apply
 
 on:
@@ -67,15 +66,16 @@ jobs:
         run: |
           set -e
 
-          echo "Validating Terraform State..."
+          echo "=========================================="
+          echo "TERRAFORM STATE VALIDATION"
+          echo "=========================================="
 
-          if ! terraform state pull >/dev/null 2>&1; then
-            echo "ERROR: Terraform State could not be loaded."
-            exit 1
-          fi
+          terraform state pull >/dev/null
 
-          echo "Terraform State is accessible."
+          echo "State accessible."
 
+          echo
+          echo "Managed resources:"
           terraform state list || true
 
       - name: Terraform Plan
@@ -137,6 +137,7 @@ jobs:
         working-directory: terraform/environments/prod/data
         run: |
           set -e
+
           terraform validate
 
       - name: Terraform State Validation
@@ -145,15 +146,12 @@ jobs:
           set -e
 
           echo "=========================================="
-          echo "VALIDATING TERRAFORM STATE"
+          echo "TERRAFORM STATE VALIDATION"
           echo "=========================================="
 
-          if ! terraform state pull >/dev/null 2>&1; then
-            echo "ERROR: Terraform State could not be loaded."
-            exit 1
-          fi
+          terraform state pull >/dev/null
 
-          echo "Terraform State is accessible."
+          echo "State accessible."
 
           echo
           echo "Managed resources:"
@@ -174,79 +172,75 @@ jobs:
             local resource_id="$2"
 
             if terraform state list | grep -Fxq "$address"; then
-              echo "STATE OK:"
-              echo "  $address"
+              echo "STATE OK: $address"
               return 0
             fi
 
-            echo "NOT IN STATE:"
-            echo "  $address"
-
-            echo "Importing existing AWS resource:"
-            echo "  ID: $resource_id"
+            echo "Resource exists in AWS but is absent from Terraform State."
+            echo "Importing:"
+            echo "  Address: $address"
+            echo "  ID:      $resource_id"
 
             terraform import "$address" "$resource_id"
 
-            echo "Import completed:"
-            echo "  $address"
+            echo "Import completed: $address"
           }
+
+          # ------------------------------------------------------
+          # RDS
+          # ------------------------------------------------------
 
           echo
           echo "------------------------------------------"
-          echo "RDS"
+          echo "RDS RECONCILIATION"
           echo "------------------------------------------"
 
           DATABASE_IDENTIFIERS=$(
-            terraform console -var-file="terraform.tfvars" <<'EOF'
-          jsonencode({
-            for k, v in var.databases :
-            k => v.identifier
-          })
-          EOF
+            terraform console -var-file="terraform.tfvars" <<< \
+            'jsonencode({ for k, v in var.databases : k => v.identifier })'
           )
 
-          echo "Configured databases:"
+          echo "Configured RDS:"
           echo "$DATABASE_IDENTIFIERS"
 
-          while IFS=$'\t' read -r database identifier; do
+          echo "$DATABASE_IDENTIFIERS" |
+            jq -r 'to_entries[] | [.key, .value] | @tsv' |
+            while IFS=$'\t' read -r database identifier; do
 
-            if [ -z "$database" ] || [ -z "$identifier" ]; then
-              continue
-            fi
+              ADDRESS="module.rds.aws_db_instance.postgres[\"$database\"]"
 
-            ADDRESS="module.rds.aws_db_instance.postgres[\"$database\"]"
+              echo
+              echo "Checking:"
+              echo "  Database:   $database"
+              echo "  Identifier: $identifier"
 
-            echo
-            echo "Checking RDS:"
-            echo "  Database:   $database"
-            echo "  Identifier: $identifier"
+              if aws rds describe-db-instances \
+                --db-instance-identifier "$identifier" \
+                --region "$AWS_REGION" \
+                >/dev/null 2>&1; then
 
-            if aws rds describe-db-instances \
-              --db-instance-identifier "$identifier" \
-              --region "$AWS_REGION" \
-              >/dev/null 2>&1; then
+                echo "RDS exists in AWS."
 
-              echo "RDS exists in AWS."
+                import_if_missing \
+                  "$ADDRESS" \
+                  "$identifier"
 
-              import_if_missing \
-                "$ADDRESS" \
-                "$identifier"
+              else
 
-            else
+                echo "RDS does not exist."
+                echo "Terraform will create it."
 
-              echo "RDS does not exist in AWS."
-              echo "Terraform will create it."
+              fi
 
-            fi
+            done
 
-          done < <(
-            echo "$DATABASE_IDENTIFIERS" |
-            jq -r 'to_entries[] | [.key, .value] | @tsv'
-          )
+          # ------------------------------------------------------
+          # DYNAMODB
+          # ------------------------------------------------------
 
           echo
           echo "------------------------------------------"
-          echo "DYNAMODB"
+          echo "DYNAMODB RECONCILIATION"
           echo "------------------------------------------"
 
           DYNAMODB_TABLE="togglemaster"
@@ -256,7 +250,7 @@ jobs:
             --region "$AWS_REGION" \
             >/dev/null 2>&1; then
 
-            echo "DynamoDB table exists in AWS."
+            echo "DynamoDB exists in AWS."
 
             import_if_missing \
               'module.dynamodb.aws_dynamodb_table.this' \
@@ -264,14 +258,18 @@ jobs:
 
           else
 
-            echo "DynamoDB table does not exist."
+            echo "DynamoDB does not exist."
             echo "Terraform will create it."
 
           fi
 
+          # ------------------------------------------------------
+          # SQS
+          # ------------------------------------------------------
+
           echo
           echo "------------------------------------------"
-          echo "SQS"
+          echo "SQS RECONCILIATION"
           echo "------------------------------------------"
 
           SQS_QUEUE="togglemaster"
@@ -282,7 +280,7 @@ jobs:
             --query 'QueueUrl' \
             --output text 2>/dev/null); then
 
-            echo "SQS queue exists in AWS."
+            echo "SQS exists in AWS."
 
             import_if_missing \
               'module.sqs.aws_sqs_queue.this' \
@@ -290,7 +288,7 @@ jobs:
 
           else
 
-            echo "SQS queue does not exist."
+            echo "SQS does not exist."
             echo "Terraform will create it."
 
           fi
@@ -301,7 +299,7 @@ jobs:
           echo "=========================================="
 
           echo
-          echo "Final Terraform State:"
+          echo "Terraform State:"
           terraform state list || true
 
       - name: Terraform Plan
@@ -363,6 +361,7 @@ jobs:
         working-directory: terraform/environments/prod/platform
         run: |
           set -e
+
           terraform validate
 
       - name: Terraform State Validation
@@ -371,16 +370,15 @@ jobs:
           set -e
 
           echo "=========================================="
-          echo "VALIDATING TERRAFORM STATE"
+          echo "TERRAFORM STATE VALIDATION"
           echo "=========================================="
 
-          if ! terraform state pull >/dev/null 2>&1; then
-            echo "ERROR: Terraform State could not be loaded."
-            exit 1
-          fi
+          terraform state pull >/dev/null
 
-          echo "Terraform State is accessible."
+          echo "State accessible."
 
+          echo
+          echo "Managed resources:"
           terraform state list || true
 
       - name: AWS State Reconciliation
@@ -402,22 +400,22 @@ jobs:
               return 0
             fi
 
-            echo "Resource exists in AWS but is absent from State."
+            echo "Resource exists in AWS but is absent from Terraform State."
             echo "Importing:"
             echo "  Address: $address"
             echo "  ID:      $resource_id"
 
             terraform import "$address" "$resource_id"
 
-            echo "Import completed."
+            echo "Import completed: $address"
           }
+
+          ECR_REPOSITORY="togglemaster"
 
           echo
           echo "------------------------------------------"
-          echo "ECR"
+          echo "ECR RECONCILIATION"
           echo "------------------------------------------"
-
-          ECR_REPOSITORY="togglemaster"
 
           if aws ecr describe-repositories \
             --repository-names "$ECR_REPOSITORY" \
@@ -438,10 +436,7 @@ jobs:
           fi
 
           echo
-          echo "=========================================="
-          echo "RECONCILIATION COMPLETE"
-          echo "=========================================="
-
+          echo "Terraform State:"
           terraform state list || true
 
       - name: Terraform Plan
@@ -503,6 +498,7 @@ jobs:
         working-directory: terraform/environments/prod/compute
         run: |
           set -e
+
           terraform validate
 
       - name: Terraform State Validation
@@ -511,16 +507,15 @@ jobs:
           set -e
 
           echo "=========================================="
-          echo "VALIDATING TERRAFORM STATE"
+          echo "TERRAFORM STATE VALIDATION"
           echo "=========================================="
 
-          if ! terraform state pull >/dev/null 2>&1; then
-            echo "ERROR: Terraform State could not be loaded."
-            exit 1
-          fi
+          terraform state pull >/dev/null
 
-          echo "Terraform State is accessible."
+          echo "State accessible."
 
+          echo
+          echo "Managed resources:"
           terraform state list || true
 
       - name: AWS State Reconciliation
@@ -542,31 +537,33 @@ jobs:
               return 0
             fi
 
-            echo "Resource exists in AWS but is absent from State."
+            echo "Resource exists in AWS but is absent from Terraform State."
             echo "Importing:"
             echo "  Address: $address"
             echo "  ID:      $resource_id"
 
             terraform import "$address" "$resource_id"
 
-            echo "Import completed:"
-            echo "  $address"
+            echo "Import completed: $address"
           }
+
+          # ------------------------------------------------------
+          # EKS CLUSTER
+          # ------------------------------------------------------
 
           echo
           echo "------------------------------------------"
-          echo "EKS CLUSTER"
+          echo "EKS CLUSTER RECONCILIATION"
           echo "------------------------------------------"
 
           EKS_NAME=$(
-            terraform console -var-file="terraform.tfvars" <<'EOF'
-          var.cluster_name
-          EOF
+            terraform console -var-file="terraform.tfvars" <<< \
+            'var.cluster_name'
           )
 
           EKS_NAME=$(echo "$EKS_NAME" | tr -d '"')
 
-          echo "Configured EKS cluster:"
+          echo "Configured EKS:"
           echo "  $EKS_NAME"
 
           if aws eks describe-cluster \
@@ -582,20 +579,23 @@ jobs:
 
           else
 
-            echo "EKS cluster does not exist in AWS."
+            echo "EKS cluster does not exist."
             echo "Terraform will create it."
 
           fi
 
+          # ------------------------------------------------------
+          # EKS NODE GROUP
+          # ------------------------------------------------------
+
           echo
           echo "------------------------------------------"
-          echo "EKS NODE GROUP"
+          echo "EKS NODE GROUP RECONCILIATION"
           echo "------------------------------------------"
 
           NODE_GROUP_NAME=$(
-            terraform console -var-file="terraform.tfvars" <<'EOF'
-          var.node_group_name
-          EOF
+            terraform console -var-file="terraform.tfvars" <<< \
+            'var.node_group_name'
           )
 
           NODE_GROUP_NAME=$(echo "$NODE_GROUP_NAME" | tr -d '"')
@@ -622,7 +622,7 @@ jobs:
 
             else
 
-              echo "EKS Node Group does not exist in AWS."
+              echo "EKS Node Group does not exist."
               echo "Terraform will create it."
 
             fi
@@ -630,8 +630,7 @@ jobs:
           else
 
             echo "EKS cluster does not exist."
-            echo "Node Group reconciliation will be skipped."
-            echo "Terraform will create the cluster and Node Group."
+            echo "Node Group reconciliation skipped."
 
           fi
 
@@ -717,19 +716,18 @@ jobs:
           set -e
 
           echo "=========================================="
-          echo "VALIDATING REMOTE STATES"
+          echo "REMOTE STATE VALIDATION"
           echo "=========================================="
 
           echo
-          echo "Checking Terraform configuration..."
+          echo "Validating remote states..."
 
           terraform plan \
             -refresh-only \
             -detailed-exitcode \
-            -out=networking-refresh.tfplan \
-          || STATUS=$?
+            -out=networking-refresh.tfplan
 
-          STATUS=${STATUS:-0}
+          STATUS=$?
 
           if [ "$STATUS" -eq 1 ]; then
             echo "ERROR: Remote state validation failed."
@@ -754,4 +752,4 @@ jobs:
           terraform apply \
             -auto-approve \
             tfplan
-```
+
