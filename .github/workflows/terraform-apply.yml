@@ -152,16 +152,16 @@ jobs:
           # ------------------------------------------------------------
           echo "Looking for RDS instances with prefix 'rds-postgres-'..."
 
-          INSTANCES=()
-          while IFS=$'\t' read -r id; do
-            [[ -n "$id" ]] && INSTANCES+=("$id")
-          done < <(aws rds describe-db-instances \
+          # Usa --output json e jq para extrair cada identificador como uma linha separada
+          INSTANCES_JSON=$(aws rds describe-db-instances \
             --region "$AWS_REGION" \
             --query 'DBInstances[?starts_with(DBInstanceIdentifier, `rds-postgres-`)].DBInstanceIdentifier' \
-            --output text 2>/dev/null || echo "")
+            --output json 2>/dev/null || echo '[]')
 
-          for IDENTIFIER in "${INSTANCES[@]}"; do
-            SERVICE="${IDENTIFIER#rds-postgres-}"  # remove prefixo
+          # Itera sobre cada identificador usando jq
+          echo "$INSTANCES_JSON" | jq -r '.[]' | while read -r IDENTIFIER; do
+            if [ -z "$IDENTIFIER" ]; then continue; fi
+            SERVICE="${IDENTIFIER#rds-postgres-}"  # Remove prefixo
             ADDRESS="module.rds.aws_db_instance.postgres[\"$SERVICE\"]"
             CHECK="aws rds describe-db-instances --db-instance-identifier $IDENTIFIER --region $AWS_REGION"
             try_import "$ADDRESS" "$IDENTIFIER" "$CHECK"
