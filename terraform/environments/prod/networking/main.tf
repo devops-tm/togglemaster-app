@@ -51,9 +51,9 @@ data "terraform_remote_state" "compute" {
 module "networking" {
   source = "../../../modules/networking"
 
-  eks_node_security_group = data.terraform_remote_state.compute.outputs.node_security_group_id
+  rds_instance_identifiers = toset(values(data.terraform_remote_state.data.outputs.rds_instance_identifiers))
 
-  rds_instance_identifiers = data.terraform_remote_state.data.outputs.rds_instance_identifiers
+  eks_node_security_group = data.terraform_remote_state.compute.outputs.cluster_primary_security_group_id
 
   redis_cluster_id = data.terraform_remote_state.data.outputs.redis_cluster_id
 }
