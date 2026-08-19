@@ -117,36 +117,41 @@ jobs:
           echo "STEP 2: IMPORT EXISTING RESOURCES"
           echo "=========================================="
 
-          # Função para importar se existir na AWS e não estiver no state
-          import_if_exists() {
-            local RESOURCE_ADDRESS="$1"
-            local RESOURCE_ID="$2"
-            local CHECK_COMMAND="$3"
+          # Função que tenta importar; ignora se já estiver no estado
+          try_import() {
+            local ADDRESS="$1"
+            local ID="$2"
+            local CHECK_CMD="$3"
 
-            echo "Checking $RESOURCE_ADDRESS ..."
+            echo "Checking $ADDRESS (ID: $ID) ..."
 
-            # Verifica se já está no state usando 'terraform state show'
-            # (retorna 0 se existir, 1 se não)
-            if terraform state show "$RESOURCE_ADDRESS" >/dev/null 2>&1; then
-              echo "  Already in state. Skipping import."
-              return 0
-            fi
+            if eval "$CHECK_CMD" >/dev/null 2>&1; then
+              echo "  Resource exists in AWS."
 
-            # Verifica se existe na AWS
-            if eval "$CHECK_COMMAND" >/dev/null 2>&1; then
-              echo "  Resource exists in AWS. Importing..."
-              terraform import "$RESOURCE_ADDRESS" "$RESOURCE_ID"
+              set +e
+              OUTPUT=$(terraform import "$ADDRESS" "$ID" 2>&1)
+              EXIT_CODE=$?
+              set -e
+
+              if [ $EXIT_CODE -eq 0 ]; then
+                echo "  Import successful."
+              elif echo "$OUTPUT" | grep -q "already managed by Terraform"; then
+                echo "  Already in state. Skipping."
+              else
+                echo "  Import failed with exit code $EXIT_CODE."
+                echo "  Output: $OUTPUT"
+                exit $EXIT_CODE
+              fi
             else
               echo "  Resource not found in AWS. Nothing to import."
             fi
           }
 
           # ------------------------------------------------------------
-          # RDS - importa todas as instâncias com prefixo "rds-postgres-"
+          # 1. RDS instances (prefixo rds-postgres-)
           # ------------------------------------------------------------
           echo "Looking for RDS instances with prefix 'rds-postgres-'..."
 
-          # Coleta os identificadores em um array para evitar problemas de pipe
           INSTANCES=()
           while IFS=$'\t' read -r id; do
             [[ -n "$id" ]] && INSTANCES+=("$id")
@@ -156,37 +161,37 @@ jobs:
             --output text 2>/dev/null || echo "")
 
           for IDENTIFIER in "${INSTANCES[@]}"; do
-            SERVICE=$(echo "$IDENTIFIER" | sed 's/^rds-postgres-//')
+            SERVICE="${IDENTIFIER#rds-postgres-}"  # remove prefixo
             ADDRESS="module.rds.aws_db_instance.postgres[\"$SERVICE\"]"
             CHECK="aws rds describe-db-instances --db-instance-identifier $IDENTIFIER --region $AWS_REGION"
-            import_if_exists "$ADDRESS" "$IDENTIFIER" "$CHECK"
+            try_import "$ADDRESS" "$IDENTIFIER" "$CHECK"
           done
 
           # ------------------------------------------------------------
-          # Redis
+          # 2. Redis
           # ------------------------------------------------------------
           REDIS_ID="togglemaster-redis"
           REDIS_ADDRESS="module.elasticache.aws_elasticache_cluster.redis"
           CHECK="aws elasticache describe-cache-clusters --cache-cluster-id $REDIS_ID --region $AWS_REGION"
-          import_if_exists "$REDIS_ADDRESS" "$REDIS_ID" "$CHECK"
+          try_import "$REDIS_ADDRESS" "$REDIS_ID" "$CHECK"
 
           # ------------------------------------------------------------
-          # DynamoDB
+          # 3. DynamoDB
           # ------------------------------------------------------------
           DYNAMO_NAME="togglemaster"
           DYNAMO_ADDRESS="module.dynamodb.aws_dynamodb_table.this"
           CHECK="aws dynamodb describe-table --table-name $DYNAMO_NAME --region $AWS_REGION"
-          import_if_exists "$DYNAMO_ADDRESS" "$DYNAMO_NAME" "$CHECK"
+          try_import "$DYNAMO_ADDRESS" "$DYNAMO_NAME" "$CHECK"
 
           # ------------------------------------------------------------
-          # SQS
+          # 4. SQS
           # ------------------------------------------------------------
           SQS_NAME="togglemaster"
           SQS_ADDRESS="module.sqs.aws_sqs_queue.this"
           QUEUE_URL=$(aws sqs get-queue-url --queue-name "$SQS_NAME" --region "$AWS_REGION" --query QueueUrl --output text 2>/dev/null || echo "")
           if [ -n "$QUEUE_URL" ]; then
             CHECK="aws sqs get-queue-url --queue-name $SQS_NAME --region $AWS_REGION"
-            import_if_exists "$SQS_ADDRESS" "$QUEUE_URL" "$CHECK"
+            try_import "$SQS_ADDRESS" "$QUEUE_URL" "$CHECK"
           fi
 
           echo "Import step completed."
