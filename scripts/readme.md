@@ -11,12 +11,6 @@ Antes de executar qualquer script deste diretorio, certifique-se de que o seu am
 
 ## Arquivos e Responsabilidades
 
-pushecr
-Automatiza a construcao (build) das imagens dos microsservicos e realiza o envio (push) para o AWS Elastic Container Registry (ECR). Ele identifica automaticamente o motor de conteineres disponivel no sistema, extrai o ID da conta AWS ativa e autentica no registro da nuvem antes de iniciar o processo de envio.
-
-gerar_secrets.sh
-Gera as credenciais e os arquivos de variaveis sensiveis necessarios para o provisionamento do banco de dados relacional. Este script prepara o terreno para a execucao do Terraform no modulo do RDS.
-
 testar_comunicacao.sh
 Valida a conectividade de rede e a comunicacao entre os componentes da infraestrutura, garantindo que as regras de seguranca e os ingressos do Kubernetes estao respondendo adequadamente.
 
@@ -26,8 +20,6 @@ Executa rotinas de teste de carga contra os endpoints do cluster EKS. O objetivo
 carga.log
 Arquivo de texto gerado dinamicamente que armazena os registros e metricas de saida durante a execucao do script de teste de escalabilidade.
 
-sgnode.sh
-Pega o security para criar o networking via terraform
 
 ## Como Utilizar
 

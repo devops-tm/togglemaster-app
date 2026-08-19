@@ -58,7 +58,7 @@ jobs:
       - name: Checkout togglemaster-deploy repository
         uses: actions/checkout@v4
         with:
-          repository: togglemaster/togglemaster-deploy
+          repository: togglemaster-fiapdevops/togglemaster-deploy
           token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
 
       - name: Update Kubernetes manifest
