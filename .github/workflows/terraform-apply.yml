@@ -21,11 +21,11 @@ env:
 jobs:
 
   # ============================================================
-  # SECURITY
+  # PREFLIGHT
   # ============================================================
 
-  apply_security:
-    name: Security
+  preflight:
+    name: Preflight
     runs-on: ubuntu-latest
 
     steps:
@@ -44,7 +44,11 @@ jobs:
           aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Terraform Init
+      # ----------------------------------------------------------
+      # SECURITY
+      # ----------------------------------------------------------
+
+      - name: Init Security
         working-directory: terraform/environments/prod/security
         run: |
           set -e
@@ -55,74 +59,69 @@ jobs:
             -backend-config="region=$AWS_REGION" \
             -reconfigure
 
-      - name: Terraform Validate
+      - name: Validate Security
         working-directory: terraform/environments/prod/security
         run: |
           set -e
           terraform validate
 
-      - name: Terraform State Validation
+      - name: Reconcile Security
         working-directory: terraform/environments/prod/security
+        shell: bash
         run: |
           set -e
 
           echo "=========================================="
-          echo "TERRAFORM STATE VALIDATION"
+          echo "SECURITY PREFLIGHT"
           echo "=========================================="
 
-          terraform state pull >/dev/null
-
-          echo "State accessible."
-
           echo
-          echo "Managed resources:"
+          echo "Terraform State:"
           terraform state list || true
 
-      - name: Terraform Plan
+          echo
+          echo "Checking AWS / Terraform drift..."
+
+          set +e
+          terraform plan \
+            -refresh-only \
+            -detailed-exitcode \
+            -var-file="terraform.tfvars" \
+            -out=security-refresh.tfplan
+
+          STATUS=$?
+          set -e
+
+          if [ "$STATUS" -eq 1 ]; then
+            echo
+            echo "ERROR: Terraform refresh failed."
+            exit 1
+          fi
+
+          if [ "$STATUS" -eq 2 ]; then
+            echo
+            echo "ERROR: Terraform State is not compliant with AWS."
+            echo "Existing managed resources contain drift."
+            exit 1
+          fi
+
+          echo
+          echo "Security state is synchronized with AWS."
+
+      - name: Plan Security
         working-directory: terraform/environments/prod/security
         run: |
           set -e
 
           terraform plan \
             -var-file="terraform.tfvars" \
-            -out=tfplan
+            -out=security.tfplan
 
-      - name: Terraform Apply
-        working-directory: terraform/environments/prod/security
-        run: |
-          set -e
+      # ----------------------------------------------------------
+      # DATA
+      # ----------------------------------------------------------
 
-          terraform apply \
-            -auto-approve \
-            tfplan
-
-
-  # ============================================================
-  # DATA
-  # ============================================================
-
-  apply_data:
-    name: Data
-    needs: apply_security
-    runs-on: ubuntu-latest
-
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-
-      - name: Configure AWS
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Terraform Init
+      - name: Init Data
         working-directory: terraform/environments/prod/data
         run: |
           set -e
@@ -133,58 +132,64 @@ jobs:
             -backend-config="region=$AWS_REGION" \
             -reconfigure
 
-      - name: Terraform Validate
+      - name: Validate Data
         working-directory: terraform/environments/prod/data
         run: |
           set -e
-
           terraform validate
 
-      - name: Terraform State Validation
-        working-directory: terraform/environments/prod/data
-        run: |
-          set -e
-
-          echo "=========================================="
-          echo "TERRAFORM STATE VALIDATION"
-          echo "=========================================="
-
-          terraform state pull >/dev/null
-
-          echo "State accessible."
-
-          echo
-          echo "Managed resources:"
-          terraform state list || true
-
-      - name: AWS State Reconciliation
+      - name: Reconcile Data
         working-directory: terraform/environments/prod/data
         shell: bash
         run: |
           set -e
 
           echo "=========================================="
-          echo "AWS / TERRAFORM RECONCILIATION"
+          echo "DATA PREFLIGHT"
           echo "=========================================="
 
-          import_if_missing() {
-            local address="$1"
-            local resource_id="$2"
+          STATE_BEFORE="$(mktemp)"
 
-            if terraform state list | grep -Fxq "$address"; then
-              echo "STATE OK: $address"
-              return 0
-            fi
+          terraform state list > "$STATE_BEFORE" || true
 
-            echo "Resource exists in AWS but is absent from Terraform State."
-            echo "Importing:"
-            echo "  Address: $address"
-            echo "  ID:      $resource_id"
+          echo
+          echo "Terraform State:"
+          cat "$STATE_BEFORE" || true
 
-            terraform import "$address" "$resource_id"
+          # ------------------------------------------------------
+          # STATE DRIFT
+          # ------------------------------------------------------
 
-            echo "Import completed: $address"
-          }
+          echo
+          echo "Checking Terraform State against AWS..."
+
+          set +e
+          terraform plan \
+            -refresh-only \
+            -detailed-exitcode \
+            -var-file="terraform.tfvars" \
+            -out=data-refresh.tfplan
+
+          REFRESH_STATUS=$?
+          set -e
+
+          if [ "$REFRESH_STATUS" -eq 1 ]; then
+            echo
+            echo "ERROR: Terraform refresh failed."
+            exit 1
+          fi
+
+          if [ "$REFRESH_STATUS" -eq 2 ]; then
+            echo
+            echo "ERROR: Existing Terraform-managed resources"
+            echo "are not synchronized with AWS."
+            echo
+            echo "This is considered drift."
+            exit 1
+          fi
+
+          echo
+          echo "Terraform State is synchronized with AWS."
 
           # ------------------------------------------------------
           # RDS
@@ -195,44 +200,106 @@ jobs:
           echo "RDS RECONCILIATION"
           echo "------------------------------------------"
 
-          DATABASE_IDENTIFIERS=$(
-            terraform console -var-file="terraform.tfvars" <<< \
-            'jsonencode({ for k, v in var.databases : k => v.identifier })'
+          DATABASES_JSON=$(
+            terraform console -var-file="terraform.tfvars" \
+              <<< 'jsonencode(var.databases)'
           )
 
-          echo "Configured RDS:"
-          echo "$DATABASE_IDENTIFIERS"
+          echo
+          echo "Configured databases:"
+          echo "$DATABASES_JSON"
 
-          echo "$DATABASE_IDENTIFIERS" |
-            jq -r 'to_entries[] | [.key, .value] | @tsv' |
-            while IFS=$'\t' read -r database identifier; do
+          echo "$DATABASES_JSON" |
+            jq -r 'to_entries[] | [.key, .value.identifier] | @tsv' |
+            while IFS=$'\t' read -r DATABASE IDENTIFIER; do
 
-              ADDRESS="module.rds.aws_db_instance.postgres[\"$database\"]"
+              ADDRESS="module.rds.aws_db_instance.postgres[\"$DATABASE\"]"
 
               echo
-              echo "Checking:"
-              echo "  Database:   $database"
-              echo "  Identifier: $identifier"
+              echo "Database:   $DATABASE"
+              echo "Identifier: $IDENTIFIER"
+              echo "Address:    $ADDRESS"
 
               if aws rds describe-db-instances \
-                --db-instance-identifier "$identifier" \
+                --db-instance-identifier "$IDENTIFIER" \
                 --region "$AWS_REGION" \
                 >/dev/null 2>&1; then
 
-                echo "RDS exists in AWS."
+                echo "AWS: EXISTS"
 
-                import_if_missing \
-                  "$ADDRESS" \
-                  "$identifier"
+                if terraform state list |
+                  grep -Fxq "$ADDRESS"; then
+
+                  echo "STATE: EXISTS"
+                  echo "Result: resource already managed."
+
+                else
+
+                  echo "STATE: MISSING"
+                  echo "Action: IMPORT"
+
+                  terraform import \
+                    "$ADDRESS" \
+                    "$IDENTIFIER"
+
+                  echo "Import completed."
+
+                fi
 
               else
 
-                echo "RDS does not exist."
-                echo "Terraform will create it."
+                echo "AWS: NOT FOUND"
+                echo "STATE: $(terraform state list | grep -Fx "$ADDRESS" >/dev/null 2>&1 && echo EXISTS || echo MISSING)"
+                echo "Result: Terraform may create this resource."
 
               fi
 
             done
+
+          # ------------------------------------------------------
+          # REDIS
+          # ------------------------------------------------------
+
+          echo
+          echo "------------------------------------------"
+          echo "REDIS RECONCILIATION"
+          echo "------------------------------------------"
+
+          REDIS_ID="togglemaster-redis"
+          REDIS_ADDRESS="module.elasticache.aws_elasticache_cluster.redis"
+
+          if aws elasticache describe-cache-clusters \
+            --cache-cluster-id "$REDIS_ID" \
+            --region "$AWS_REGION" \
+            >/dev/null 2>&1; then
+
+            echo "AWS: EXISTS"
+
+            if terraform state list |
+              grep -Fxq "$REDIS_ADDRESS"; then
+
+              echo "STATE: EXISTS"
+              echo "Result: resource already managed."
+
+            else
+
+              echo "STATE: MISSING"
+              echo "Action: IMPORT"
+
+              terraform import \
+                "$REDIS_ADDRESS" \
+                "$REDIS_ID"
+
+              echo "Import completed."
+
+            fi
+
+          else
+
+            echo "AWS: NOT FOUND"
+            echo "Result: Terraform may create Redis."
+
+          fi
 
           # ------------------------------------------------------
           # DYNAMODB
@@ -243,23 +310,39 @@ jobs:
           echo "DYNAMODB RECONCILIATION"
           echo "------------------------------------------"
 
-          DYNAMODB_TABLE="togglemaster"
+          DYNAMODB_NAME="togglemaster"
+          DYNAMODB_ADDRESS="module.dynamodb.aws_dynamodb_table.this"
 
           if aws dynamodb describe-table \
-            --table-name "$DYNAMODB_TABLE" \
+            --table-name "$DYNAMODB_NAME" \
             --region "$AWS_REGION" \
             >/dev/null 2>&1; then
 
-            echo "DynamoDB exists in AWS."
+            echo "AWS: EXISTS"
 
-            import_if_missing \
-              'module.dynamodb.aws_dynamodb_table.this' \
-              "$DYNAMODB_TABLE"
+            if terraform state list |
+              grep -Fxq "$DYNAMODB_ADDRESS"; then
+
+              echo "STATE: EXISTS"
+              echo "Result: resource already managed."
+
+            else
+
+              echo "STATE: MISSING"
+              echo "Action: IMPORT"
+
+              terraform import \
+                "$DYNAMODB_ADDRESS" \
+                "$DYNAMODB_NAME"
+
+              echo "Import completed."
+
+            fi
 
           else
 
-            echo "DynamoDB does not exist."
-            echo "Terraform will create it."
+            echo "AWS: NOT FOUND"
+            echo "Result: Terraform may create DynamoDB."
 
           fi
 
@@ -272,81 +355,78 @@ jobs:
           echo "SQS RECONCILIATION"
           echo "------------------------------------------"
 
-          SQS_QUEUE="togglemaster"
+          SQS_NAME="togglemaster"
+          SQS_ADDRESS="module.sqs.aws_sqs_queue.this"
 
-          if QUEUE_URL=$(aws sqs get-queue-url \
-            --queue-name "$SQS_QUEUE" \
-            --region "$AWS_REGION" \
-            --query 'QueueUrl' \
-            --output text 2>/dev/null); then
+          if QUEUE_URL=$(
+            aws sqs get-queue-url \
+              --queue-name "$SQS_NAME" \
+              --region "$AWS_REGION" \
+              --query "QueueUrl" \
+              --output text 2>/dev/null
+          ); then
 
-            echo "SQS exists in AWS."
+            echo "AWS: EXISTS"
 
-            import_if_missing \
-              'module.sqs.aws_sqs_queue.this' \
-              "$QUEUE_URL"
+            if terraform state list |
+              grep -Fxq "$SQS_ADDRESS"; then
+
+              echo "STATE: EXISTS"
+              echo "Result: resource already managed."
+
+            else
+
+              echo "STATE: MISSING"
+              echo "Action: IMPORT"
+
+              terraform import \
+                "$SQS_ADDRESS" \
+                "$QUEUE_URL"
+
+              echo "Import completed."
+
+            fi
 
           else
 
-            echo "SQS does not exist."
-            echo "Terraform will create it."
+            echo "AWS: NOT FOUND"
+            echo "Result: Terraform may create SQS."
 
           fi
 
           echo
-          echo "=========================================="
-          echo "RECONCILIATION COMPLETE"
-          echo "=========================================="
+          echo "------------------------------------------"
+          echo "DATA STATE AFTER RECONCILIATION"
+          echo "------------------------------------------"
 
-          echo
-          echo "Terraform State:"
           terraform state list || true
 
-      - name: Terraform Plan
+      - name: Validate Data Configuration
         working-directory: terraform/environments/prod/data
+        shell: bash
         run: |
           set -e
+
+          echo "=========================================="
+          echo "DATA CONFIGURATION VALIDATION"
+          echo "=========================================="
 
           terraform plan \
             -var-file="terraform.tfvars" \
-            -out=tfplan
+            -out=data.tfplan
 
-      - name: Terraform Apply
-        working-directory: terraform/environments/prod/data
-        run: |
-          set -e
+          terraform show \
+            -json \
+            data.tfplan > data-plan.json
 
-          terraform apply \
-            -auto-approve \
-            tfplan
+          echo
+          echo "Terraform configuration is valid."
 
+      # ----------------------------------------------------------
+      # PLATFORM
+      # ----------------------------------------------------------
 
-  # ============================================================
-  # PLATFORM
-  # ============================================================
-
-  apply_platform:
-    name: Platform
-    needs: apply_security
-    runs-on: ubuntu-latest
-
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-
-      - name: Configure AWS
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Terraform Init
+      - name: Init Platform
         working-directory: terraform/environments/prod/platform
         run: |
           set -e
@@ -357,60 +437,45 @@ jobs:
             -backend-config="region=$AWS_REGION" \
             -reconfigure
 
-      - name: Terraform Validate
+      - name: Validate Platform
         working-directory: terraform/environments/prod/platform
         run: |
           set -e
-
           terraform validate
 
-      - name: Terraform State Validation
-        working-directory: terraform/environments/prod/platform
-        run: |
-          set -e
-
-          echo "=========================================="
-          echo "TERRAFORM STATE VALIDATION"
-          echo "=========================================="
-
-          terraform state pull >/dev/null
-
-          echo "State accessible."
-
-          echo
-          echo "Managed resources:"
-          terraform state list || true
-
-      - name: AWS State Reconciliation
+      - name: Reconcile Platform
         working-directory: terraform/environments/prod/platform
         shell: bash
         run: |
           set -e
 
           echo "=========================================="
-          echo "AWS / TERRAFORM RECONCILIATION"
+          echo "PLATFORM PREFLIGHT"
           echo "=========================================="
 
-          import_if_missing() {
-            local address="$1"
-            local resource_id="$2"
+          set +e
+          terraform plan \
+            -refresh-only \
+            -detailed-exitcode \
+            -var-file="terraform.tfvars" \
+            -out=platform-refresh.tfplan
 
-            if terraform state list | grep -Fxq "$address"; then
-              echo "STATE OK: $address"
-              return 0
-            fi
+          STATUS=$?
+          set -e
 
-            echo "Resource exists in AWS but is absent from Terraform State."
-            echo "Importing:"
-            echo "  Address: $address"
-            echo "  ID:      $resource_id"
+          if [ "$STATUS" -eq 1 ]; then
+            echo "ERROR: Terraform refresh failed."
+            exit 1
+          fi
 
-            terraform import "$address" "$resource_id"
+          if [ "$STATUS" -eq 2 ]; then
+            echo
+            echo "ERROR: Platform State contains drift."
+            exit 1
+          fi
 
-            echo "Import completed: $address"
-          }
-
-          ECR_REPOSITORY="togglemaster"
+          ECR_NAME="togglemaster"
+          ECR_ADDRESS='module.ecr.aws_ecr_repository.this["togglemaster"]'
 
           echo
           echo "------------------------------------------"
@@ -418,72 +483,53 @@ jobs:
           echo "------------------------------------------"
 
           if aws ecr describe-repositories \
-            --repository-names "$ECR_REPOSITORY" \
+            --repository-names "$ECR_NAME" \
             --region "$AWS_REGION" \
             >/dev/null 2>&1; then
 
-            echo "ECR repository exists in AWS."
+            echo "AWS: EXISTS"
 
-            import_if_missing \
-              'module.ecr.aws_ecr_repository.this["togglemaster"]' \
-              "$ECR_REPOSITORY"
+            if terraform state list |
+              grep -Fxq "$ECR_ADDRESS"; then
+
+              echo "STATE: EXISTS"
+
+            else
+
+              echo "STATE: MISSING"
+              echo "Action: IMPORT"
+
+              terraform import \
+                "$ECR_ADDRESS" \
+                "$ECR_NAME"
+
+            fi
 
           else
 
-            echo "ECR repository does not exist."
-            echo "Terraform will create it."
+            echo "AWS: NOT FOUND"
+            echo "Result: Terraform may create ECR."
 
           fi
 
           echo
-          echo "Terraform State:"
+          echo "Platform State:"
           terraform state list || true
 
-      - name: Terraform Plan
+      - name: Validate Platform Configuration
         working-directory: terraform/environments/prod/platform
         run: |
           set -e
 
           terraform plan \
             -var-file="terraform.tfvars" \
-            -out=tfplan
+            -out=platform.tfplan
 
-      - name: Terraform Apply
-        working-directory: terraform/environments/prod/platform
-        run: |
-          set -e
+      # ------------------------------------------------------
+      # COMPUTE
+      # ------------------------------------------------------
 
-          terraform apply \
-            -auto-approve \
-            tfplan
-
-
-  # ============================================================
-  # COMPUTE
-  # ============================================================
-
-  apply_compute:
-    name: Compute
-    needs: apply_security
-    runs-on: ubuntu-latest
-
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-
-      - name: Configure AWS
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Terraform Init
+      - name: Init Compute
         working-directory: terraform/environments/prod/compute
         run: |
           set -e
@@ -494,93 +540,104 @@ jobs:
             -backend-config="region=$AWS_REGION" \
             -reconfigure
 
-      - name: Terraform Validate
+      - name: Validate Compute
         working-directory: terraform/environments/prod/compute
         run: |
           set -e
-
           terraform validate
 
-      - name: Terraform State Validation
-        working-directory: terraform/environments/prod/compute
-        run: |
-          set -e
-
-          echo "=========================================="
-          echo "TERRAFORM STATE VALIDATION"
-          echo "=========================================="
-
-          terraform state pull >/dev/null
-
-          echo "State accessible."
-
-          echo
-          echo "Managed resources:"
-          terraform state list || true
-
-      - name: AWS State Reconciliation
+      - name: Reconcile Compute
         working-directory: terraform/environments/prod/compute
         shell: bash
         run: |
           set -e
 
           echo "=========================================="
-          echo "AWS / TERRAFORM RECONCILIATION"
+          echo "COMPUTE PREFLIGHT"
           echo "=========================================="
 
-          import_if_missing() {
-            local address="$1"
-            local resource_id="$2"
+          set +e
+          terraform plan \
+            -refresh-only \
+            -detailed-exitcode \
+            -var-file="terraform.tfvars" \
+            -out=compute-refresh.tfplan
 
-            if terraform state list | grep -Fxq "$address"; then
-              echo "STATE OK: $address"
-              return 0
-            fi
+          STATUS=$?
+          set -e
 
-            echo "Resource exists in AWS but is absent from Terraform State."
-            echo "Importing:"
-            echo "  Address: $address"
-            echo "  ID:      $resource_id"
+          if [ "$STATUS" -eq 1 ]; then
+            echo "ERROR: Terraform refresh failed."
+            exit 1
+          fi
 
-            terraform import "$address" "$resource_id"
+          if [ "$STATUS" -eq 2 ]; then
+            echo
+            echo "ERROR: Compute State contains drift."
+            exit 1
+          fi
 
-            echo "Import completed: $address"
-          }
+          # ------------------------------------------------------
+          # EKS CONFIGURATION
+          # ------------------------------------------------------
+
+          EKS_NAME=$(
+            terraform console -var-file="terraform.tfvars" \
+              <<< 'var.cluster_name'
+          )
+
+          EKS_NAME=$(echo "$EKS_NAME" | tr -d '"')
+
+          NODE_GROUP_NAME=$(
+            terraform console -var-file="terraform.tfvars" \
+              <<< 'var.node_group_name'
+          )
+
+          NODE_GROUP_NAME=$(echo "$NODE_GROUP_NAME" | tr -d '"')
+
+          echo
+          echo "Configured EKS:"
+          echo "  Cluster:    $EKS_NAME"
+          echo "  Node Group: $NODE_GROUP_NAME"
 
           # ------------------------------------------------------
           # EKS CLUSTER
           # ------------------------------------------------------
+
+          EKS_ADDRESS="module.eks.aws_eks_cluster.eks"
 
           echo
           echo "------------------------------------------"
           echo "EKS CLUSTER RECONCILIATION"
           echo "------------------------------------------"
 
-          EKS_NAME=$(
-            terraform console -var-file="terraform.tfvars" <<< \
-            'var.cluster_name'
-          )
-
-          EKS_NAME=$(echo "$EKS_NAME" | tr -d '"')
-
-          echo "Configured EKS:"
-          echo "  $EKS_NAME"
-
           if aws eks describe-cluster \
             --name "$EKS_NAME" \
             --region "$AWS_REGION" \
             >/dev/null 2>&1; then
 
-            echo "EKS cluster exists in AWS."
+            echo "AWS: EXISTS"
 
-            import_if_missing \
-              'module.eks.aws_eks_cluster.eks' \
-              "$EKS_NAME"
+            if terraform state list |
+              grep -Fxq "$EKS_ADDRESS"; then
+
+              echo "STATE: EXISTS"
+
+            else
+
+              echo "STATE: MISSING"
+              echo "Action: IMPORT"
+
+              terraform import \
+                "$EKS_ADDRESS" \
+                "$EKS_NAME"
+
+            fi
 
           else
 
-            echo "EKS cluster does not exist."
-            echo "Terraform will create it."
+            echo "AWS: NOT FOUND"
+            echo "Result: Terraform may create EKS."
 
           fi
 
@@ -588,20 +645,12 @@ jobs:
           # EKS NODE GROUP
           # ------------------------------------------------------
 
+          NODE_ADDRESS="module.eks.aws_eks_node_group.nodes"
+
           echo
           echo "------------------------------------------"
           echo "EKS NODE GROUP RECONCILIATION"
           echo "------------------------------------------"
-
-          NODE_GROUP_NAME=$(
-            terraform console -var-file="terraform.tfvars" <<< \
-            'var.node_group_name'
-          )
-
-          NODE_GROUP_NAME=$(echo "$NODE_GROUP_NAME" | tr -d '"')
-
-          echo "Configured Node Group:"
-          echo "  $NODE_GROUP_NAME"
 
           if aws eks describe-cluster \
             --name "$EKS_NAME" \
@@ -614,40 +663,233 @@ jobs:
               --region "$AWS_REGION" \
               >/dev/null 2>&1; then
 
-              echo "EKS Node Group exists in AWS."
+              echo "AWS: EXISTS"
 
-              import_if_missing \
-                'module.eks.aws_eks_node_group.nodes' \
-                "$EKS_NAME:$NODE_GROUP_NAME"
+              if terraform state list |
+                grep -Fxq "$NODE_ADDRESS"; then
+
+                echo "STATE: EXISTS"
+
+              else
+
+                echo "STATE: MISSING"
+                echo "Action: IMPORT"
+
+                terraform import \
+                  "$NODE_ADDRESS" \
+                  "$EKS_NAME:$NODE_GROUP_NAME"
+
+              fi
 
             else
 
-              echo "EKS Node Group does not exist."
-              echo "Terraform will create it."
+              echo "AWS: NOT FOUND"
+              echo "Result: Terraform may create Node Group."
 
             fi
 
           else
 
             echo "EKS cluster does not exist."
-            echo "Node Group reconciliation skipped."
+            echo "Node Group validation deferred."
 
           fi
 
           echo
-          echo "=========================================="
-          echo "RECONCILIATION COMPLETE"
-          echo "=========================================="
-
-          echo
-          echo "Terraform State:"
+          echo "Compute State:"
           terraform state list || true
 
-      - name: Terraform Plan
+      - name: Validate Compute Configuration
         working-directory: terraform/environments/prod/compute
         run: |
           set -e
 
+          terraform plan \
+            -var-file="terraform.tfvars" \
+            -out=compute.tfplan
+
+
+  # ============================================================
+  # APPLY SECURITY
+  # ============================================================
+
+  apply_security:
+    name: Apply Security
+    needs: preflight
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform Init
+        working-directory: terraform/environments/prod/security
+        run: |
+          terraform init \
+            -backend-config="bucket=$BUCKET_STATE" \
+            -backend-config="key=prod/security/terraform.tfstate" \
+            -backend-config="region=$AWS_REGION" \
+            -reconfigure
+
+      - name: Terraform Plan
+        working-directory: terraform/environments/prod/security
+        run: |
+          terraform plan \
+            -var-file="terraform.tfvars" \
+            -out=tfplan
+
+      - name: Terraform Apply
+        working-directory: terraform/environments/prod/security
+        run: |
+          terraform apply \
+            -auto-approve \
+            tfplan
+
+
+  # ============================================================
+  # APPLY DATA
+  # ============================================================
+
+  apply_data:
+    name: Apply Data
+    needs:
+      - preflight
+      - apply_security
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform Init
+        working-directory: terraform/environments/prod/data
+        run: |
+          terraform init \
+            -backend-config="bucket=$BUCKET_STATE" \
+            -backend-config="key=prod/data/terraform.tfstate" \
+            -backend-config="region=$AWS_REGION" \
+            -reconfigure
+
+      - name: Terraform Plan
+        working-directory: terraform/environments/prod/data
+        run: |
+          terraform plan \
+            -var-file="terraform.tfvars" \
+            -out=tfplan
+
+      - name: Terraform Apply
+        working-directory: terraform/environments/prod/data
+        run: |
+          terraform apply \
+            -auto-approve \
+            tfplan
+
+
+  # ============================================================
+  # APPLY PLATFORM
+  # ============================================================
+
+  apply_platform:
+    name: Apply Platform
+    needs:
+      - preflight
+      - apply_security
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform Init
+        working-directory: terraform/environments/prod/platform
+        run: |
+          terraform init \
+            -backend-config="bucket=$BUCKET_STATE" \
+            -backend-config="key=prod/platform/terraform.tfstate" \
+            -backend-config="region=$AWS_REGION" \
+            -reconfigure
+
+      - name: Terraform Plan
+        working-directory: terraform/environments/prod/platform
+        run: |
+          terraform plan \
+            -var-file="terraform.tfvars" \
+            -out=tfplan
+
+      - name: Terraform Apply
+        working-directory: terraform/environments/prod/platform
+        run: |
+          terraform apply \
+            -auto-approve \
+            tfplan
+
+
+  # ============================================================
+  # APPLY COMPUTE
+  # ============================================================
+
+  apply_compute:
+    name: Apply Compute
+    needs:
+      - preflight
+      - apply_security
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform Init
+        working-directory: terraform/environments/prod/compute
+        run: |
+          terraform init \
+            -backend-config="bucket=$BUCKET_STATE" \
+            -backend-config="key=prod/compute/terraform.tfstate" \
+            -backend-config="region=$AWS_REGION" \
+            -reconfigure
+
+      - name: Terraform Plan
+        working-directory: terraform/environments/prod/compute
+        run: |
           terraform plan \
             -var-file="terraform.tfvars" \
             -out=tfplan
@@ -655,19 +897,17 @@ jobs:
       - name: Terraform Apply
         working-directory: terraform/environments/prod/compute
         run: |
-          set -e
-
           terraform apply \
             -auto-approve \
             tfplan
 
 
   # ============================================================
-  # NETWORKING
+  # APPLY NETWORKING
   # ============================================================
 
   apply_networking:
-    name: Networking
+    name: Apply Networking
     needs:
       - apply_data
       - apply_platform
@@ -677,14 +917,11 @@ jobs:
 
     steps:
 
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v3
 
-      - name: Configure AWS
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
@@ -694,8 +931,6 @@ jobs:
       - name: Terraform Init
         working-directory: terraform/environments/prod/networking
         run: |
-          set -e
-
           terraform init \
             -backend-config="bucket=$BUCKET_STATE" \
             -backend-config="key=prod/networking/terraform.tfstate" \
@@ -705,8 +940,6 @@ jobs:
       - name: Terraform Validate
         working-directory: terraform/environments/prod/networking
         run: |
-          set -e
-
           terraform validate
 
       - name: Remote State Validation
@@ -716,11 +949,8 @@ jobs:
           set -e
 
           echo "=========================================="
-          echo "REMOTE STATE VALIDATION"
+          echo "NETWORKING REMOTE STATE VALIDATION"
           echo "=========================================="
-
-          echo
-          echo "Validating remote states..."
 
           terraform plan \
             -refresh-only \
@@ -730,11 +960,11 @@ jobs:
           STATUS=$?
 
           if [ "$STATUS" -eq 1 ]; then
-            echo "ERROR: Remote state validation failed."
+            echo "ERROR: Networking remote state validation failed."
             exit 1
           fi
 
-          echo "Remote state validation completed."
+          echo "Remote states are accessible."
 
       - name: Terraform Plan
         working-directory: terraform/environments/prod/networking
@@ -752,4 +982,3 @@ jobs:
           terraform apply \
             -auto-approve \
             tfplan
-
