@@ -1,7 +1,9 @@
 ecr_repositories = [
-  "togglemaster-auth",
-  "togglemaster-flag",
-  "togglemaster-targeting"
+  "auth-service",
+  "flag-service", 
+  "targeting-service",
+  "evaluation-service",
+  "analytics-service"
 ]
 
 sqs_queue_name       = "togglemaster-evaluation"
