@@ -182,11 +182,10 @@ jobs:
       - name: Terraform Destroy
         working-directory: terraform/environments/prod/networking
         run: |
-          set -e
-
           terraform destroy \
             -var-file="terraform.tfvars" \
             -var="terraform_state_bucket=$BUCKET_STATE" \
+            -var="eks_node_security_group=" \
             -auto-approve
 
 
