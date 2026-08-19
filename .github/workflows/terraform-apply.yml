@@ -119,17 +119,20 @@ jobs:
 
           # Função para importar se existir na AWS e não estiver no state
           import_if_exists() {
-            RESOURCE_ADDRESS=$1
-            RESOURCE_ID=$2
-            CHECK_COMMAND=$3
+            local RESOURCE_ADDRESS="$1"
+            local RESOURCE_ID="$2"
+            local CHECK_COMMAND="$3"
 
             echo "Checking $RESOURCE_ADDRESS ..."
 
-            if terraform state list | grep -Fxq "$RESOURCE_ADDRESS"; then
+            # Verifica se já está no state usando 'terraform state show'
+            # (retorna 0 se existir, 1 se não)
+            if terraform state show "$RESOURCE_ADDRESS" >/dev/null 2>&1; then
               echo "  Already in state. Skipping import."
               return 0
             fi
 
+            # Verifica se existe na AWS
             if eval "$CHECK_COMMAND" >/dev/null 2>&1; then
               echo "  Resource exists in AWS. Importing..."
               terraform import "$RESOURCE_ADDRESS" "$RESOURCE_ID"
@@ -143,18 +146,21 @@ jobs:
           # ------------------------------------------------------------
           echo "Looking for RDS instances with prefix 'rds-postgres-'..."
 
-          aws rds describe-db-instances \
-            --region $AWS_REGION \
+          # Coleta os identificadores em um array para evitar problemas de pipe
+          INSTANCES=()
+          while IFS=$'\t' read -r id; do
+            [[ -n "$id" ]] && INSTANCES+=("$id")
+          done < <(aws rds describe-db-instances \
+            --region "$AWS_REGION" \
             --query 'DBInstances[?starts_with(DBInstanceIdentifier, `rds-postgres-`)].DBInstanceIdentifier' \
-            --output text | tr '\t' '\n' | while read -r IDENTIFIER; do
-              if [ -z "$IDENTIFIER" ]; then continue; fi
+            --output text 2>/dev/null || echo "")
 
-              # Extrai o nome do serviço (auth, flag, etc.) removendo o prefixo
-              SERVICE=$(echo "$IDENTIFIER" | sed 's/^rds-postgres-//')
-              ADDRESS="module.rds.aws_db_instance.postgres[\"$SERVICE\"]"
-              CHECK="aws rds describe-db-instances --db-instance-identifier $IDENTIFIER --region $AWS_REGION"
-              import_if_exists "$ADDRESS" "$IDENTIFIER" "$CHECK"
-            done
+          for IDENTIFIER in "${INSTANCES[@]}"; do
+            SERVICE=$(echo "$IDENTIFIER" | sed 's/^rds-postgres-//')
+            ADDRESS="module.rds.aws_db_instance.postgres[\"$SERVICE\"]"
+            CHECK="aws rds describe-db-instances --db-instance-identifier $IDENTIFIER --region $AWS_REGION"
+            import_if_exists "$ADDRESS" "$IDENTIFIER" "$CHECK"
+          done
 
           # ------------------------------------------------------------
           # Redis
@@ -177,7 +183,7 @@ jobs:
           # ------------------------------------------------------------
           SQS_NAME="togglemaster"
           SQS_ADDRESS="module.sqs.aws_sqs_queue.this"
-          QUEUE_URL=$(aws sqs get-queue-url --queue-name $SQS_NAME --region $AWS_REGION --query QueueUrl --output text 2>/dev/null || echo "")
+          QUEUE_URL=$(aws sqs get-queue-url --queue-name "$SQS_NAME" --region "$AWS_REGION" --query QueueUrl --output text 2>/dev/null || echo "")
           if [ -n "$QUEUE_URL" ]; then
             CHECK="aws sqs get-queue-url --queue-name $SQS_NAME --region $AWS_REGION"
             import_if_exists "$SQS_ADDRESS" "$QUEUE_URL" "$CHECK"
