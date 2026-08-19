@@ -304,9 +304,8 @@ jobs:
             -backend-config="region=$AWS_REGION" \
             -reconfigure
 
-      - name: Terraform Apply (create/update)
+      - name: Terraform Apply
         working-directory: terraform/environments/prod/networking
         run: |
-          terraform apply \
-            -auto-approve \
-            -var-file="terraform.tfvars"
+          terraform apply -auto-approve \
+            -var="terraform_state_bucket=$BUCKET_STATE"
