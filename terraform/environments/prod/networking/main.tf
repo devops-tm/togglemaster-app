@@ -52,8 +52,6 @@ module "networking" {
   source = "../../../modules/networking"
 
   rds_instance_identifiers = toset(values(data.terraform_remote_state.data.outputs.rds_instance_identifiers))
-
-  eks_node_security_group = var.eks_node_security_group != "" ? var.eks_node_security_group : data.terraform_remote_state.compute.outputs.cluster_primary_security_group_id
-
-  redis_cluster_id = data.terraform_remote_state.data.outputs.redis_cluster_id
+  eks_node_security_group  = var.eks_node_security_group
+  redis_cluster_id         = data.terraform_remote_state.data.outputs.redis_cluster_id
 }
