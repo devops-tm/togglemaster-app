@@ -107,7 +107,7 @@ jobs:
             echo "No drift detected. State is up-to-date."
           fi
 
-      - name: Import Existing Resources (if any)
+      - name: Import Existing Resources
         working-directory: terraform/environments/prod/data
         shell: bash
         run: |
@@ -125,13 +125,11 @@ jobs:
 
             echo "Checking $RESOURCE_ADDRESS ..."
 
-            # Verifica se já está no state
             if terraform state list | grep -Fxq "$RESOURCE_ADDRESS"; then
               echo "  Already in state. Skipping import."
               return 0
             fi
 
-            # Verifica se existe na AWS
             if eval "$CHECK_COMMAND" >/dev/null 2>&1; then
               echo "  Resource exists in AWS. Importing..."
               terraform import "$RESOURCE_ADDRESS" "$RESOURCE_ID"
@@ -140,27 +138,43 @@ jobs:
             fi
           }
 
-          # RDS instances
-          DATABASES_JSON=$(terraform console -var-file="terraform.tfvars" <<< 'jsonencode(var.databases)')
-          echo "$DATABASES_JSON" | jq -r 'to_entries[] | "\(.key) \(.value.identifier)"' | while read -r DB IDENTIFIER; do
-            ADDRESS="module.rds.aws_db_instance.postgres[\"$DB\"]"
-            CHECK="aws rds describe-db-instances --db-instance-identifier $IDENTIFIER --region $AWS_REGION"
-            import_if_exists "$ADDRESS" "$IDENTIFIER" "$CHECK"
-          done
+          # ------------------------------------------------------------
+          # RDS - importa todas as instâncias com prefixo "rds-postgres-"
+          # ------------------------------------------------------------
+          echo "Looking for RDS instances with prefix 'rds-postgres-'..."
 
+          aws rds describe-db-instances \
+            --region $AWS_REGION \
+            --query 'DBInstances[?starts_with(DBInstanceIdentifier, `rds-postgres-`)].DBInstanceIdentifier' \
+            --output text | tr '\t' '\n' | while read -r IDENTIFIER; do
+              if [ -z "$IDENTIFIER" ]; then continue; fi
+
+              # Extrai o nome do serviço (auth, flag, etc.) removendo o prefixo
+              SERVICE=$(echo "$IDENTIFIER" | sed 's/^rds-postgres-//')
+              ADDRESS="module.rds.aws_db_instance.postgres[\"$SERVICE\"]"
+              CHECK="aws rds describe-db-instances --db-instance-identifier $IDENTIFIER --region $AWS_REGION"
+              import_if_exists "$ADDRESS" "$IDENTIFIER" "$CHECK"
+            done
+
+          # ------------------------------------------------------------
           # Redis
+          # ------------------------------------------------------------
           REDIS_ID="togglemaster-redis"
           REDIS_ADDRESS="module.elasticache.aws_elasticache_cluster.redis"
           CHECK="aws elasticache describe-cache-clusters --cache-cluster-id $REDIS_ID --region $AWS_REGION"
           import_if_exists "$REDIS_ADDRESS" "$REDIS_ID" "$CHECK"
 
+          # ------------------------------------------------------------
           # DynamoDB
+          # ------------------------------------------------------------
           DYNAMO_NAME="togglemaster"
           DYNAMO_ADDRESS="module.dynamodb.aws_dynamodb_table.this"
           CHECK="aws dynamodb describe-table --table-name $DYNAMO_NAME --region $AWS_REGION"
           import_if_exists "$DYNAMO_ADDRESS" "$DYNAMO_NAME" "$CHECK"
 
+          # ------------------------------------------------------------
           # SQS
+          # ------------------------------------------------------------
           SQS_NAME="togglemaster"
           SQS_ADDRESS="module.sqs.aws_sqs_queue.this"
           QUEUE_URL=$(aws sqs get-queue-url --queue-name $SQS_NAME --region $AWS_REGION --query QueueUrl --output text 2>/dev/null || echo "")
