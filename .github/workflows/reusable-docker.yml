@@ -71,8 +71,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
+          git pull --rebase origin main
+          
           kustomize edit set image $RAW_NAME=${{ needs.docker-ecr.outputs.registry }}/$RAW_NAME:${{ github.sha }}
           
           git add kustomization.yaml
           git commit -m "chore: update $RAW_NAME image tag to ${{ github.sha }}"
-          git push
+          
+          git push origin main
