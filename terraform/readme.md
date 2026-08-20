@@ -31,7 +31,7 @@ graph TD
     end
 
     subgraph mods["modules"]
-        direction LR
+        direction TB
         m_dynamodb["dynamodb"]
         m_ecr["ecr"]
         m_eks["eks"]
