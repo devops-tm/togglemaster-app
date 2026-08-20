@@ -20,7 +20,7 @@ jobs:
   # SECURITY
   # ============================================================
   apply_security:
-    name: Apply Security (SSM + KMS)
+    name: Security (SSM + KMS)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -52,7 +52,7 @@ jobs:
   # DATA (RDS + Redis + DynamoDB + SQS) WITH RECONCILIATION
   # ============================================================
   apply_data:
-    name: Apply Data with Reconciliation
+    name: DATA (RDS + Redis + DynamoDB + SQS)
     needs: apply_security
     runs-on: ubuntu-latest
     steps:
@@ -216,7 +216,7 @@ jobs:
   # PLATFORM (ECR)
   # ============================================================
   apply_platform:
-    name: Apply Platform (ECR)
+    name: Platform (ECR)
     needs: apply_security
     runs-on: ubuntu-latest
     steps:
@@ -249,7 +249,7 @@ jobs:
   # COMPUTE (EKS)
   # ============================================================
   apply_compute:
-    name: Apply Compute (EKS)
+    name: Compute (EKS)
     needs: apply_security
     runs-on: ubuntu-latest
     steps:
@@ -282,7 +282,7 @@ jobs:
   # NETWORKING (Security Groups)
   # ============================================================
   apply_networking:
-    name: Apply Networking (Security Groups)
+    name: Networking (Security Groups)
     needs: [apply_data, apply_platform, apply_compute]
     runs-on: ubuntu-latest
     steps:
