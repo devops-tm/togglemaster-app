@@ -27,3 +27,14 @@ module "eks" {
   min_size         = var.min_size
   max_size         = var.max_size
 }
+
+resource "aws_ssm_parameter" "cluster_name" {
+  name  = "/togglemaster/prod/cluster-name"
+  type  = "String"
+  value = module.eks.cluster_name
+
+  tags = {
+    Project     = "ToggleMaster"
+    Environment = "prod"
+  }
+}
