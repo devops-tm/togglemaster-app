@@ -1,245 +1,143 @@
 # Terraform
 
-# Fluxo Geral de Provisionamento
+# Terraform - Infraestrutura como Código
 
-```text
-Pré-requisitos
-        │
-        ▼
-gerar_secret.sh
-        │
-        ▼
-terraform/serverless
-        │
-        ▼
-Build e Push das imagens
-        │
-        ▼
-terraform/rds
-        │
-        ▼
-terraform/elasticache
-        │
-        ▼
-terraform/security
-        │
-        ▼
-Configurar kubectl
-        │
-        ▼
-Deploy Kubernetes
-```
+![Terraform Version](https://img.shields.io/badge/terraform-1.6+-623CE4?logo=terraform)
+![AWS Provider](https://img.shields.io/badge/aws-5.0+-FF9900?logo=amazon-aws)
 
- A infraestrutura foi dividida em camadas independentes para facilitar a manutenção, reduzir custos e permitir a destruição seletiva dos recursos durante o desenvolvimento.
+Este repositório contém toda a definição da infraestrutura da ToggleMaster na AWS, utilizando **Terraform** com módulos reutilizáveis e separação por ambientes.
 
 ---
 
-# Pré-requisitos
+## Estrutura de Diretórios
 
-Antes de iniciar o provisionamento, certifique-se de possuir:
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': { 'background': '#0d1117', 'primaryColor': '#21262d', 'primaryTextColor': '#c9d1d9', 'primaryBorderColor': '#30363d', 'lineColor': '#8b949e', 'textColor': '#c9d1d9' }}}%%
+graph TD
+    root((terraform))
 
-- Terraform instalado;
-- AWS CLI instalada e autenticada;
-- Podman ou Docker instalado;
-- kubectl instalado;
-- Cluster Amazon EKS criado (AWS Academy);
-- Arquivo `.env` configurado na raiz do projeto.
+    subgraph envs["environments"]
+        subgraph prod["prod"]
+            direction TB
+            sec["security"] --> mod_sec["security"]
+            data["data"] --> mod_rds["rds"]
+            data --> mod_elasticache["elasticache"]
+            data --> mod_dynamodb["dynamodb"]
+            data --> mod_sqs["sqs"]
+            plat["platform"] --> mod_ecr["ecr"]
+            comp["compute"] --> mod_eks["eks"]
+            net["networking"] --> mod_net["networking"]
+        end
+    end
 
-Em seguida, gere automaticamente os arquivos necessários para o Terraform e Kubernetes:
+    subgraph mods["modules"]
+        direction LR
+        m_dynamodb["dynamodb"]
+        m_ecr["ecr"]
+        m_eks["eks"]
+        m_elasticache["elasticache"]
+        m_net["networking"]
+        m_rds["rds"]
+        m_sec["security"]
+        m_sqs["sqs"]
+    end
 
-```bash
-./scripts/gerar_secret.sh
-```
+    root --> envs
+    mods --> root
 
-Este script cria automaticamente:
-
-- `terraform/rds/secrets.auto.tfvars`
-- `k8s/secret.yaml`
-
----
-
-# Ordem Recomendada de Provisionamento
-
-Para evitar inconsistências entre os serviços, recomenda-se executar os módulos na seguinte ordem:
-
-```text
-1. terraform/serverless
-2. Construção e envio das imagens para o Amazon ECR
-3. terraform/rds
-4. terraform/elasticache
-5. terraform/security
-6. Deploy do Kubernetes
+    classDef module fill:#7b2fbe,stroke:#5a1a8a,color:#ffffff,font-weight:bold
+    class mod_sec,mod_rds,mod_elasticache,mod_dynamodb,mod_sqs,mod_ecr,mod_eks,mod_net module
+    class m_dynamodb,m_ecr,m_eks,m_elasticache,m_net,m_rds,m_sec,m_sqs module
 ```
 
 ---
 
-# Provisionamento da Camada Serverless
+## Dependência entre Módulos
 
-Esta camada engloba:
+O fluxo de provisionamento segue uma ordem específica para garantir que os recursos sejam criados na sequência correta.
 
-- 5 repositórios Amazon ECR;
-- 1 fila Amazon SQS;
-- 1 tabela Amazon DynamoDB.
-
-Estes serviços utilizam faturação baseada em utilização (pay-per-use), não gerando custos fixos por hora de inatividade.
-
-Navegue até ao diretório do módulo e aplique a configuração.
-
-```bash
-cd terraform/serverless
-terraform init
-terraform apply
+```mermaid
+graph TD
+    A[security] --> B[data]
+    A --> C[platform]
+    B --> D[compute]
+    B --> E[networking]
+    C --> D
+    D --> E
 ```
 
-Ao final da execução serão apresentados:
-
-- URLs dos repositórios Amazon ECR;
-- URL da fila Amazon SQS;
-- Nome da tabela DynamoDB.
-
-Estes valores serão utilizados posteriormente na configuração do Kubernetes.
+| Módulo | Depende de | Cria |
+|--------|------------|------|
+| security | - | SSM Parameters, senhas aleatórias |
+| data | security | RDS, Redis, DynamoDB, SQS |
+| platform | - | Repositórios ECR |
+| compute | platform (opcional) | Cluster EKS + Node Groups |
+| networking | data, compute | Regras de segurança (ingress) |
 
 ---
 
-# Construção e Envio das Imagens para o Amazon ECR
+## Resumo dos Módulos
 
-Após o provisionamento da camada serverless, os repositórios Amazon ECR estarão disponíveis para receber as imagens dos microsserviços.
-
-Autentique o cliente de contentores no registo da AWS.
-
-Substitua `<SEU_ACCOUNT_ID>` pelo identificador da sua conta AWS.
-
-```bash
-aws ecr get-login-password --region us-east-1 | podman login --username AWS --password-stdin <SEU_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com
-```
-
-Em seguida execute o script abaixo na raiz do projeto.
-
-```bash
-REGISTO="<SEU_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com"
-
-SERVICOS="auth-service flag-service targeting-service evaluation-service analytics-service"
-
-for SERVICO in $SERVICOS; do
-    echo "Construindo e enviando $SERVICO..."
-
-    podman build -t $SERVICO ./$SERVICO
-    podman tag $SERVICO:latest $REGISTO/$SERVICO:latest
-    podman push $REGISTO/$SERVICO:latest
-done
-```
+| Módulo | Descrição | Principais Recursos |
+|--------|-----------|----------------------|
+| **security** | Geração e armazenamento de credenciais | `random_password`, `aws_ssm_parameter` |
+| **rds** | Instâncias PostgreSQL | `aws_db_instance`, `aws_security_group` |
+| **elasticache** | Cluster Redis | `aws_elasticache_cluster`, `aws_elasticache_subnet_group` |
+| **dynamodb** | Tabela para analytics | `aws_dynamodb_table` |
+| **sqs** | Fila de mensagens | `aws_sqs_queue` |
+| **ecr** | Repositórios de imagens Docker | `aws_ecr_repository` |
+| **eks** | Cluster Kubernetes | `aws_eks_cluster`, `aws_eks_node_group` |
+| **networking** | Regras de segurança entre serviços | `aws_vpc_security_group_ingress_rule` |
 
 ---
 
-# Provisionamento da Camada Relacional
+## Remote State
 
-Esta camada é responsável pela criação de três instâncias independentes do Amazon RDS PostgreSQL:
+Todos os estados são armazenados remotamente em um **bucket S3**, com chaves distintas por ambiente e módulo:
 
-- Auth Service
-- Flag Service
-- Targeting Service
-
-Cada microsserviço possui a sua própria base de dados, garantindo isolamento e independência entre os domínios da aplicação.
-
-A configuração foi adaptada às restrições do AWS Academy utilizando:
-
-- PostgreSQL 15;
-- Instâncias `db.t3.micro`;
-- Single-AZ;
-- Backup final desativado;
-- Enhanced Monitoring desativado;
-- Storage encriptado.
-
-Execute:
-
-```bash
-cd terraform/rds
-terraform init
-terraform apply
+```
+prod/security/terraform.tfstate
+prod/data/terraform.tfstate
+prod/platform/terraform.tfstate
+prod/compute/terraform.tfstate
+prod/networking/terraform.tfstate
 ```
 
-Posteriormente você vai realizar as instruções descritas no README do diretório `k8s` para criar as tabelas das bases de dados através dos Jobs Kubernetes.
+Isso garante isolamento entre camadas e facilita o trabalho em equipe.
 
 ---
 
-# Provisionamento da Camada de Cache
+## Como Usar
 
-O Amazon ElastiCache Redis foi isolado num módulo próprio para permitir um ciclo de vida independente da restante infraestrutura.
-
-A configuração utiliza:
-
-- Redis;
-- cache.t3.micro;
-- 1 nó;
-- VPC padrão da AWS Academy.
-
-Execute:
-
+### 1. Inicializar um módulo
 ```bash
-cd terraform/elasticache
-terraform init
-terraform apply
+cd environments/prod/<modulo>
+terraform init -reconfigure
 ```
 
-Ao final da execução será apresentado o endpoint do Redis, utilizado posteriormente pelo Kubernetes.
-
----
-
-# Configuração Automática dos Security Groups
-
-Após a criação do Amazon RDS, ElastiCache e do cluster Amazon EKS, execute o módulo responsável por configurar automaticamente a comunicação entre os serviços.
-
-Este módulo identifica automaticamente:
-
-- Security Group do cluster EKS;
-- Security Groups das instâncias RDS;
-- Security Group do ElastiCache.
-
-Em seguida cria as regras necessárias para permitir:
-
-- EKS → PostgreSQL (5432)
-- EKS → Redis (6379)
-
-Execute primeiramente o script *confignetwork.sh* para encontrar o security groups e colocar em uma variavel, sem ele o aws academy não permite criar via terraform devido as restrições do labrole.
-
-
+### 2. Planejar mudanças
 ```bash
-cd terraform/security
-terraform init
-terraform apply
+terraform plan -var-file="terraform.tfvars"
+```
+
+### 3. Aplicar
+```bash
+terraform apply -var-file="terraform.tfvars" -auto-approve
+```
+
+### 4. Destruir (cuidado!)
+```bash
+terraform destroy -var-file="terraform.tfvars" -auto-approve
 ```
 
 ---
 
-# Deploy da Aplicação
+## Observações Importantes
 
-Após toda a infraestrutura estar provisionada, prossiga para o diretório Kubernetes e siga as instruções do respetivo README.
-
-```text
-k8s/README.md
-```
-
----
-
-# Rotina de Otimização de Custos
-
-Para evitar o consumo desnecessário dos créditos disponibilizados pelo AWS Academy, recomenda-se destruir diariamente apenas os recursos que possuem faturação contínua.
-
-## Destruir ElastiCache
-
-```bash
-cd terraform/elasticache
-terraform destroy
-```
-
-## Destruir Amazon RDS
-
-```bash
-cd terraform/rds
-terraform destroy
-```
-
-Os recursos da camada Serverless (Amazon ECR, Amazon DynamoDB e Amazon SQS) podem permanecer ativos, uma vez que utilizam faturação baseada em utilização e normalmente não geram custos significativos quando não estão a ser utilizados.
+- As senhas são geradas aleatoriamente pelo módulo `security` e armazenadas no **SSM Parameter Store** como `SecureString`.
+- O módulo `data` lê as credenciais via `data.aws_ssm_parameter`, evitando exposição no estado.
+- O módulo `networking` só cria regras de segurança se o security group do EKS for fornecido; no destroy, se o valor for vazio, nenhuma regra é criada, permitindo a remoção sem dependências.
+- No ambiente AWS Academy, o EKS utiliza a `LabRole` existente (não cria roles IAM).
 
 ---
 
