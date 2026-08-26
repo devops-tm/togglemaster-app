@@ -324,6 +324,6 @@ jobs:
               await github.rest.actions.createWorkflowDispatch({
                 owner: 'togglemaster-fiapdevops',
                 repo: 'togglemaster-deploy',
-                workflow_id: 'install-argocd.yml',
+                workflow_id: 'argocd-install.yml',
                 ref: 'deploy'
               });
