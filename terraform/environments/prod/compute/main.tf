@@ -1,27 +1,10 @@
-terraform {
-  backend "s3" {
-    key     = "prod/compute/terraform.tfstate"
-    encrypt = true
-  }
-
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
-}
-
-
 # ------------------------------------------------------------------
 # PROVIDERS
 # ------------------------------------------------------------------
 
 terraform {
   backend "s3" {
-    bucket         = "togglemaster-terraform-state"
     key            = "prod/compute/terraform.tfstate"
-    region         = "us-east-1"
     encrypt        = true
   }
 
