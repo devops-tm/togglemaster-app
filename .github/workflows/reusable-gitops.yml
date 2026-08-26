@@ -29,7 +29,7 @@ on:
         required: true
 
 jobs:
-  update-gitops:
+  update:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout GitOps repository
@@ -38,8 +38,10 @@ jobs:
           repository: ${{ inputs.gitops-repo }}
           token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           ref: ${{ inputs.gitops-branch }}
+          path: gitops-repo
 
       - name: Setup Git user
+        working-directory: gitops-repo
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -47,23 +49,23 @@ jobs:
       - name: Determine service folder
         id: folder
         run: |
-          if [ -n "${{ inputs.service-folder }}" ]; then
-            echo "FOLDER=${{ inputs.service-folder }}" >> $GITHUB_OUTPUT
-          else
+          FOLDER="${{ inputs.service-folder }}"
+          if [ -z "$FOLDER" ]; then
             FOLDER="${{ inputs.image-name }}"
-            FOLDER="${FOLDER#togglemaster-}"
-            echo "FOLDER=$FOLDER" >> $GITHUB_OUTPUT
+            FOLDER="${FOLDER#togglemaster-}"  # remove prefixo se existir
           fi
+          echo "FOLDER=$FOLDER" >> $GITHUB_OUTPUT
 
       - name: Update kustomization.yaml
-        working-directory: k8s/base/services/${{ steps.folder.outputs.FOLDER }}
+        working-directory: gitops-repo/k8s/base/services/${{ steps.folder.outputs.FOLDER }}
         run: |
           git fetch origin
+          # Garantir que está na branch correta e sincronizada
           if git ls-remote --heads origin ${{ inputs.gitops-branch }} | grep -q ${{ inputs.gitops-branch }}; then
-            echo "Branch existe. Fazendo pull..."
+            git checkout ${{ inputs.gitops-branch }} || git checkout -b ${{ inputs.gitops-branch }}
             git pull --rebase origin ${{ inputs.gitops-branch }}
           else
-            echo "Branch não existe. Será criada."
+            git checkout -b ${{ inputs.gitops-branch }}
           fi
 
           kustomize edit set image ${{ inputs.image-name }}=${{ inputs.registry }}/${{ inputs.image-name }}:${{ inputs.image-tag }}
@@ -72,7 +74,7 @@ jobs:
           git commit -m "chore: update ${{ inputs.image-name }} image tag to ${{ inputs.image-tag }}" || echo "Nenhuma alteração"
 
       - name: Push changes (with retry)
-        working-directory: k8s/base/services/${{ steps.folder.outputs.FOLDER }}
+        working-directory: gitops-repo/k8s/base/services/${{ steps.folder.outputs.FOLDER }}
         run: |
           MAX_RETRIES=5
           RETRY_DELAY=2
