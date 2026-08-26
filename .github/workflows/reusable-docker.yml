@@ -51,47 +51,47 @@ jobs:
           docker push ${{ steps.ecr-login.outputs.registry }}/${{ inputs.image-name }}
 
   update-gitops:
-  name: Update GitOps Repository
-  needs: docker-ecr
-  runs-on: ubuntu-latest
-  concurrency:
-    group: gitops-update
-    cancel-in-progress: false
-  steps:
-    - name: Checkout togglemaster-deploy repository
-      uses: actions/checkout@v4
-      with:
-        repository: togglemaster-fiapdevops/togglemaster-deploy
-        token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+    name: Update GitOps Repository
+    needs: docker-ecr
+    runs-on: ubuntu-latest
+    concurrency:
+      group: gitops-update
+      cancel-in-progress: false
+    steps:
+      - name: Checkout togglemaster-deploy repository
+        uses: actions/checkout@v4
+        with:
+          repository: togglemaster-fiapdevops/togglemaster-deploy
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
 
-    - name: Update Kubernetes manifest
-      run: |
-        RAW_NAME="${{ inputs.image-name }}"
-        DEPLOY_FOLDER="${RAW_NAME%-service}"
-        
-        cd k8s/base/services/$DEPLOY_FOLDER
-        
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-        
-        git fetch origin
-        git checkout deploy || git checkout -b deploy
-        git pull --rebase origin deploy
-        
-        kustomize edit set image $RAW_NAME=${{ needs.docker-ecr.outputs.registry }}/$RAW_NAME:${{ github.sha }}
-        
-        git add kustomization.yaml
-        git commit -m "chore: update $RAW_NAME image tag to ${{ github.sha }}"
-        
-        MAX_RETRIES=5
-        RETRY_DELAY=2
-        for i in $(seq 1 $MAX_RETRIES); do
-          echo "Tentativa $i de $MAX_RETRIES..."
-          git pull --rebase origin deploy 2>/dev/null && git push origin deploy && break
-          if [ $i -eq $MAX_RETRIES ]; then
-            echo "Falha após $MAX_RETRIES tentativas. Saindo com erro."
-            exit 1
-          fi
-          sleep $RETRY_DELAY
-          RETRY_DELAY=$((RETRY_DELAY * 2))
-        done
+      - name: Update Kubernetes manifest
+        run: |
+          RAW_NAME="${{ inputs.image-name }}"
+          DEPLOY_FOLDER="${RAW_NAME%-service}"
+          
+          cd k8s/base/services/$DEPLOY_FOLDER
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git fetch origin
+          git checkout deploy || git checkout -b deploy
+          git pull --rebase origin deploy
+          
+          kustomize edit set image $RAW_NAME=${{ needs.docker-ecr.outputs.registry }}/$RAW_NAME:${{ github.sha }}
+          
+          git add kustomization.yaml
+          git commit -m "chore: update $RAW_NAME image tag to ${{ github.sha }}"
+          
+          MAX_RETRIES=5
+          RETRY_DELAY=2
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "Tentativa $i de $MAX_RETRIES..."
+            git pull --rebase origin deploy 2>/dev/null && git push origin deploy && break
+            if [ $i -eq $MAX_RETRIES ]; then
+              echo "Falha após $MAX_RETRIES tentativas. Saindo com erro."
+              exit 1
+            fi
+            sleep $RETRY_DELAY
+            RETRY_DELAY=$((RETRY_DELAY * 2))
+          done

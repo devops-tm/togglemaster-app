@@ -309,3 +309,21 @@ jobs:
         run: |
           terraform apply -auto-approve \
             -var="terraform_state_bucket=$BUCKET_STATE"
+
+  trigger-argocd-install:
+      name: Trigger ArgoCD Installation
+      needs: [apply_networking]
+      runs-on: ubuntu-latest
+      if: success()
+      steps:
+        - name: Trigger workflow in togglemaster-deploy
+          uses: actions/github-script@v7
+          with:
+            github-token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+            script: |
+              await github.rest.actions.createWorkflowDispatch({
+                owner: 'togglemaster-fiapdevops',
+                repo: 'togglemaster-deploy',
+                workflow_id: 'install-argocd.yml',
+                ref: 'deploy'
+              });
