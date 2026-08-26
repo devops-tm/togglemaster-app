@@ -53,13 +53,10 @@ jobs:
   update-gitops:
     name: Update GitOps Repository
     needs: docker-ecr
-    runs-on: ubuntu-latest
-    steps:
-      - name: Call reusable-gitops workflow
-        uses: ./.github/workflows/reusable-gitops.yml
-        with:
-          image-name: ${{ inputs.image-name }}
-          image-tag: ${{ github.sha }}
-          registry: ${{ needs.docker-ecr.outputs.registry }}
-          gitops-repo: 'togglemaster-fiapdevops/togglemaster-deploy'
-          gitops-branch: 'deploy'
+    uses: ./.github/workflows/reusable-gitops.yml
+    with:
+      image-name: ${{ inputs.image-name }}
+      image-tag: ${{ github.sha }}
+      registry: ${{ needs.docker-ecr.outputs.registry }}
+      gitops-repo: 'togglemaster-fiapdevops/togglemaster-deploy'
+      gitops-branch: 'deploy'
