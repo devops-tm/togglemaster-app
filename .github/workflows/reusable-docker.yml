@@ -60,3 +60,5 @@ jobs:
       registry: ${{ needs.docker-ecr.outputs.registry }}
       gitops-repo: 'togglemaster-fiapdevops/togglemaster-deploy'
       gitops-branch: 'deploy'
+    secrets:
+      PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}

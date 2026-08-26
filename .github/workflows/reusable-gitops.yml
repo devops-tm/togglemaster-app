@@ -4,32 +4,29 @@ on:
   workflow_call:
     inputs:
       image-name:
-        description: 'Nome da imagem'
         required: true
         type: string
       image-tag:
-        description: 'Tag da imagem (ex: commit SHA)'
         required: true
         type: string
       registry:
-        description: 'Registry ECR'
         required: true
         type: string
       gitops-repo:
-        description: 'Repositório GitOps (owner/repo)'
         required: false
         type: string
         default: 'togglemaster-fiapdevops/togglemaster-deploy'
       gitops-branch:
-        description: 'Branch do repositório GitOps'
         required: false
         type: string
         default: 'deploy'
       service-folder:
-        description: 'Pasta do serviço dentro de k8s/base/services'
         required: false
         type: string
         default: ''
+    secrets:
+      PERSONAL_ACCESS_TOKEN:
+        required: true
 
 jobs:
   update-gitops:
@@ -61,20 +58,18 @@ jobs:
       - name: Update kustomization.yaml
         working-directory: k8s/base/services/${{ steps.folder.outputs.FOLDER }}
         run: |
-          # Verifica se a branch existe remotamente e sincroniza
           git fetch origin
           if git ls-remote --heads origin ${{ inputs.gitops-branch }} | grep -q ${{ inputs.gitops-branch }}; then
-            echo "Branch ${{ inputs.gitops-branch }} existe. Fazendo pull..."
+            echo "Branch existe. Fazendo pull..."
             git pull --rebase origin ${{ inputs.gitops-branch }}
           else
-            echo "Branch ${{ inputs.gitops-branch }} não existe. Será criada."
+            echo "Branch não existe. Será criada."
           fi
 
-          # Atualiza a imagem
           kustomize edit set image ${{ inputs.image-name }}=${{ inputs.registry }}/${{ inputs.image-name }}:${{ inputs.image-tag }}
 
           git add kustomization.yaml
-          git commit -m "chore: update ${{ inputs.image-name }} image tag to ${{ inputs.image-tag }}" || echo "Nenhuma alteração para commit"
+          git commit -m "chore: update ${{ inputs.image-name }} image tag to ${{ inputs.image-tag }}" || echo "Nenhuma alteração"
 
       - name: Push changes (with retry)
         working-directory: k8s/base/services/${{ steps.folder.outputs.FOLDER }}
