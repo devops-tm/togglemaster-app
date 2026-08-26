@@ -1,0 +1,99 @@
+name: Reusable GitOps Update
+
+on:
+  workflow_call:
+    inputs:
+      image-name:
+        description: 'Nome da imagem'
+        required: true
+        type: string
+      image-tag:
+        description: 'Tag da imagem (ex: commit SHA)'
+        required: true
+        type: string
+      registry:
+        description: 'Registry ECR'
+        required: true
+        type: string
+      gitops-repo:
+        description: 'Repositório GitOps (owner/repo)'
+        required: false
+        type: string
+        default: 'togglemaster-fiapdevops/togglemaster-deploy'
+      gitops-branch:
+        description: 'Branch do repositório GitOps'
+        required: false
+        type: string
+        default: 'deploy'
+      service-folder:
+        description: 'Pasta do serviço dentro de k8s/base/services'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  update-gitops:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout GitOps repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.gitops-repo }}
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          ref: ${{ inputs.gitops-branch }}
+
+      - name: Setup Git user
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Determine service folder
+        id: folder
+        run: |
+          if [ -n "${{ inputs.service-folder }}" ]; then
+            echo "FOLDER=${{ inputs.service-folder }}" >> $GITHUB_OUTPUT
+          else
+            FOLDER="${{ inputs.image-name }}"
+            FOLDER="${FOLDER#togglemaster-}"
+            echo "FOLDER=$FOLDER" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update kustomization.yaml
+        working-directory: k8s/base/services/${{ steps.folder.outputs.FOLDER }}
+        run: |
+          # Verifica se a branch existe remotamente e sincroniza
+          git fetch origin
+          if git ls-remote --heads origin ${{ inputs.gitops-branch }} | grep -q ${{ inputs.gitops-branch }}; then
+            echo "Branch ${{ inputs.gitops-branch }} existe. Fazendo pull..."
+            git pull --rebase origin ${{ inputs.gitops-branch }}
+          else
+            echo "Branch ${{ inputs.gitops-branch }} não existe. Será criada."
+          fi
+
+          # Atualiza a imagem
+          kustomize edit set image ${{ inputs.image-name }}=${{ inputs.registry }}/${{ inputs.image-name }}:${{ inputs.image-tag }}
+
+          git add kustomization.yaml
+          git commit -m "chore: update ${{ inputs.image-name }} image tag to ${{ inputs.image-tag }}" || echo "Nenhuma alteração para commit"
+
+      - name: Push changes (with retry)
+        working-directory: k8s/base/services/${{ steps.folder.outputs.FOLDER }}
+        run: |
+          MAX_RETRIES=5
+          RETRY_DELAY=2
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "Tentativa $i de $MAX_RETRIES..."
+            if git push origin ${{ inputs.gitops-branch }}; then
+              echo "Push bem-sucedido!"
+              break
+            else
+              echo "Push falhou. Tentando rebase e repetindo..."
+              git pull --rebase origin ${{ inputs.gitops-branch }} 2>/dev/null || true
+              sleep $RETRY_DELAY
+              RETRY_DELAY=$((RETRY_DELAY * 2))
+            fi
+            if [ $i -eq $MAX_RETRIES ]; then
+              echo "Falha após $MAX_RETRIES tentativas. Saindo com erro."
+              exit 1
+            fi
+          done
