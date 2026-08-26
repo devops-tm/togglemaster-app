@@ -52,7 +52,8 @@ jobs:
           FOLDER="${{ inputs.service-folder }}"
           if [ -z "$FOLDER" ]; then
             FOLDER="${{ inputs.image-name }}"
-            FOLDER="${FOLDER#togglemaster-}"  # remove prefixo se existir
+            FOLDER="${FOLDER#togglemaster-}"   # remove prefixo
+            FOLDER="${FOLDER%-service}"        # remove sufixo -service
           fi
           echo "FOLDER=$FOLDER" >> $GITHUB_OUTPUT
 
