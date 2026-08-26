@@ -84,3 +84,14 @@ resource "aws_eks_node_group" "nodes" {
     aws_eks_cluster.eks
   ]
 }
+
+resource "kubernetes_namespace" "togglemaster" {
+  metadata {
+    name = "togglemaster"
+  }
+
+  depends_on = [
+    aws_eks_cluster.eks,
+    aws_eks_node_group.nodes
+  ]
+}
