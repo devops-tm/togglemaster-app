@@ -24,21 +24,6 @@ provider "aws" {
   region = var.aws_region
 }
 
-data "aws_eks_cluster" "eks" {
-  name = module.eks.cluster_name
-}
-
-data "aws_eks_cluster_auth" "cluster" {
-  name = module.eks.cluster_name
-}
-
-provider "kubernetes" {
-  host                   = data.aws_eks_cluster.eks.endpoint
-  cluster_ca_certificate = base64decode(data.aws_eks_cluster.eks.certificate_authority[0].data)
-  token                  = data.aws_eks_cluster_auth.cluster.token
-}
-
-
 module "eks" {
   source = "../../../modules/eks"
 
@@ -50,6 +35,18 @@ module "eks" {
   min_size         = var.min_size
   max_size         = var.max_size
 }
+
+data "aws_eks_cluster_auth" "cluster" {
+  name = module.eks.cluster_name
+}
+
+
+provider "kubernetes" {
+  host                   = module.eks.cluster_endpoint
+  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+  token                  = data.aws_eks_cluster_auth.cluster.token
+}
+
 
 resource "aws_ssm_parameter" "cluster_name" {
   name  = "/togglemaster/prod/cluster-name"
