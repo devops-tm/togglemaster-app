@@ -49,6 +49,7 @@ jobs:
           echo "AWS_ACCOUNT_ID=$ACCOUNT_ID" >> $GITHUB_ENV
 
       - name: Login to Amazon ECR
+        id: ecr-login   # <-- ID OBRIGATÓRIO AQUI
         run: |
           aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | \
             docker login --username AWS --password-stdin ${{ steps.account.outputs.account_id }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
@@ -61,11 +62,16 @@ jobs:
 
       - name: Push Docker image to Amazon ECR
         run: |
+          # Usa APENAS a variável $REGISTRY (que veio do set-registry)
           REGISTRY="${{ steps.set-registry.outputs.registry }}"
-          docker tag ${{ inputs.image-name }} ${{ steps.ecr-login.outputs.registry }}/${{ inputs.image-name }}:${{ github.sha }}
-          docker push $REGISTRY/${{ inputs.image-name }}
-      
-      - name: Test ECR authorization
+          
+          # Tag com a SHA (ex: 480176.../analytics-service:abc123)
+          docker tag ${{ inputs.image-name }} $REGISTRY/${{ inputs.image-name }}:${{ github.sha }}
+          
+          # Push da tag SHA
+          docker push $REGISTRY/${{ inputs.image-name }}:${{ github.sha }}
+
+      - name: Test ECR authorization (opcional)
         run: |
           if ! aws ecr get-authorization-token --region ${{ secrets.AWS_REGION }} >/dev/null 2>&1; then
             echo "ERROR: Cannot get ECR authorization token. Check permissions."
