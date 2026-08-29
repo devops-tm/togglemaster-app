@@ -22,7 +22,7 @@ jobs:
 
       - name: Build Docker Image
         working-directory: ${{ inputs.service-path }}
-        run: docker build -t ${{ inputs.image-name}}:latest .
+        run: docker build -t ${{ inputs.image-name }}:latest .
 
       - name: Run Trivy vulnerability scanner in image mode
         uses: aquasecurity/trivy-action@master
@@ -52,7 +52,7 @@ jobs:
       
       - name: Debug registry
         run: echo "Registry: ${{ steps.ecr-login.outputs.registry }}"
-        
+
   update-gitops:
     name: Update GitOps Repository
     needs: docker-ecr
