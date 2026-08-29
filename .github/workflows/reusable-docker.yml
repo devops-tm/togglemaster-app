@@ -82,6 +82,4 @@ jobs:
       registry: ${{ needs.docker-ecr.outputs.registry }}
       gitops-repo: 'devops-tm/togglemaster-deploy'
       gitops-branch: 'deploy'
-    secrets:
-      PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-      secrets: inherit
+    secrets: inherit
