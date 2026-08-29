@@ -41,6 +41,17 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      - name: Validate AWS credentials
+        run: |
+          aws sts get-caller-identity
+      
+      - name: Verify ECR login
+        run: |
+          if [ -z "${{ steps.ecr-login.outputs.registry }}" ]; then
+            echo "ERROR: ECR login failed or registry empty"
+            exit 1
+          fi
+
       - name: Login to Amazon ECR
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
@@ -49,7 +60,12 @@ jobs:
         run: |
           docker tag ${{ inputs.image-name }} ${{ steps.ecr-login.outputs.registry }}/${{ inputs.image-name }}
           docker push ${{ steps.ecr-login.outputs.registry }}/${{ inputs.image-name }}
-    
+      
+      - name: Debug login output
+        run: |
+          echo "Registry: ${{ steps.ecr-login.outputs.registry }}"
+          echo "Login succeeded: ${{ steps.ecr-login.outcome }}"
+
   update-gitops:
     name: Update GitOps Repository
     needs: docker-ecr
