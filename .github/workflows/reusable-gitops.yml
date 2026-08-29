@@ -53,6 +53,13 @@ jobs:
           fi
           echo "FOLDER=$FOLDER" >> $GITHUB_OUTPUT
 
+      - name: Validate registry
+        run: |
+          if [ -z "${{ inputs.registry }}" ]; then
+            echo "ERROR: registry is empty. Cannot update image."
+            exit 1
+          fi
+
       - name: Update kustomization.yaml
         working-directory: gitops-repo/k8s/base/services/${{ steps.folder.outputs.FOLDER }}
         run: |
