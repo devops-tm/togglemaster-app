@@ -84,3 +84,4 @@ jobs:
       gitops-branch: 'deploy'
     secrets:
       PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+      secrets: inherit
