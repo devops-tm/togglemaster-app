@@ -125,18 +125,19 @@ jobs:
       # ============================================================
       # 7. ATUALIZAR KUSTOMIZATION.YAML
       # ============================================================
-      - name: Update kustomization.yaml
-        working-directory: gitops-repo/k8s/base/services/${{ steps.folder.outputs.FOLDER }}
+      - name: Update kustomization.yaml (overlay)
+        working-directory: gitops-repo/k8s/overlays/prod
         run: |
           git fetch origin
           git checkout ${{ inputs.gitops-branch }} || git checkout -b ${{ inputs.gitops-branch }}
           git pull --rebase origin ${{ inputs.gitops-branch }} || true
-          
-          kustomize edit set image ${{ inputs.image-name }}=${{ inputs.image-name }}:${{ inputs.image-tag }}
-          
+
+          # Atualiza a imagem com registry completo e tag
+          kustomize edit set image ${{ inputs.image-name }}=${{ steps.registry.outputs.registry }}/${{ inputs.image-name }}:${{ inputs.image-tag }}
+
           git add kustomization.yaml
-          git commit -m "chore: update ${{ inputs.image-name }} image tag to ${{ inputs.image-tag }}" || echo "Nenhuma alteração"
-      
+          git commit -m "chore: update ${{ inputs.image-name }} to ${{ inputs.image-tag }}" || echo "Nenhuma alteração"
+          
       # ============================================================
       # 8. PUSH COM RETRY (com debugs adicionais)
       # ============================================================
