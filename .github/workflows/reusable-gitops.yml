@@ -128,32 +128,15 @@ jobs:
       - name: Update kustomization.yaml
         working-directory: gitops-repo/k8s/base/services/${{ steps.folder.outputs.FOLDER }}
         run: |
-          echo "=========================================="
-          echo "BEFORE UPDATE - kustomization.yaml"
-          echo "=========================================="
-          cat kustomization.yaml || echo "Arquivo não encontrado!"
-
-          echo ""
-          echo "=========================================="
-          echo "UPDATING IMAGE"
-          echo "=========================================="
-          echo "kustomize edit set image ${{ inputs.image-name }}=${{ steps.registry.outputs.registry }}/${{ inputs.image-name }}:${{ inputs.image-tag }}"
-
           git fetch origin
           git checkout ${{ inputs.gitops-branch }} || git checkout -b ${{ inputs.gitops-branch }}
           git pull --rebase origin ${{ inputs.gitops-branch }} || true
-
-          kustomize edit set image ${{ inputs.image-name }}=${{ steps.registry.outputs.registry }}/${{ inputs.image-name }}:${{ inputs.image-tag }}
-
-          echo ""
-          echo "=========================================="
-          echo "AFTER UPDATE - kustomization.yaml"
-          echo "=========================================="
-          cat kustomization.yaml
-
+          
+          kustomize edit set image ${{ inputs.image-name }}=${{ inputs.image-name }}:${{ inputs.image-tag }}
+          
           git add kustomization.yaml
           git commit -m "chore: update ${{ inputs.image-name }} image tag to ${{ inputs.image-tag }}" || echo "Nenhuma alteração"
-
+      
       # ============================================================
       # 8. PUSH COM RETRY (com debugs adicionais)
       # ============================================================
