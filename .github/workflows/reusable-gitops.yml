@@ -15,15 +15,11 @@ on:
       gitops-repo:
         required: false
         type: string
-        default: 'togglemaster-fiapdevops/togglemaster-deploy'
+        default: 'devops-tm/togglemaster-deploy'
       gitops-branch:
         required: false
         type: string
         default: 'deploy'
-      service-folder:
-        required: false
-        type: string
-        default: ''
     secrets:
       PERSONAL_ACCESS_TOKEN:
         required: true
@@ -52,8 +48,8 @@ jobs:
           FOLDER="${{ inputs.service-folder }}"
           if [ -z "$FOLDER" ]; then
             FOLDER="${{ inputs.image-name }}"
-            FOLDER="${FOLDER#togglemaster-}"   # remove prefixo
-            FOLDER="${FOLDER%-service}"        # remove sufixo -service
+            FOLDER="${FOLDER#togglemaster-}"
+            FOLDER="${FOLDER%-service}"
           fi
           echo "FOLDER=$FOLDER" >> $GITHUB_OUTPUT
 
@@ -69,7 +65,7 @@ jobs:
             git checkout -b ${{ inputs.gitops-branch }}
           fi
 
-          kustomize edit set image auth-service=${{ inputs.registry }}/${{ inputs.image-name }}:${{ inputs.image-tag }}
+          kustomize edit set image ${{ inputs.image-name }}=${{ inputs.registry }}/${{ inputs.image-name }}:${{ inputs.image-tag }}
           
           git add kustomization.yaml
           git commit -m "chore: update ${{ inputs.image-name }} image tag to ${{ inputs.image-tag }}" || echo "Nenhuma alteração"

@@ -58,7 +58,7 @@ jobs:
       image-name: ${{ inputs.image-name }}
       image-tag: ${{ github.sha }}
       registry: ${{ needs.docker-ecr.outputs.registry }}
-      gitops-repo: 'togglemaster-fiapdevops/togglemaster-deploy'
+      gitops-repo: 'devops-tm/togglemaster-deploy'
       gitops-branch: 'deploy'
     secrets:
       PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
