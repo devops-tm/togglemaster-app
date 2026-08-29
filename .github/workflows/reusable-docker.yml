@@ -62,7 +62,7 @@ jobs:
       - name: Push Docker image to Amazon ECR
         run: |
           REGISTRY="${{ steps.set-registry.outputs.registry }}"
-          docker tag ${{ inputs.image-name }} $REGISTRY/${{ inputs.image-name }}
+          docker tag ${{ inputs.image-name }} ${{ steps.ecr-login.outputs.registry }}/${{ inputs.image-name }}:${{ github.sha }}
           docker push $REGISTRY/${{ inputs.image-name }}
       
       - name: Test ECR authorization
