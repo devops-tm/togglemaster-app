@@ -1,26 +1,34 @@
-codigos fonte das aplicações estavam incorretas
-dependencias declaradas incorretamente
-eks do academy possui limitações de add-on
-foi necessario utilizar o terraform para economia nos builds
-arquivo db nativo do docker-compose não funciona no RDS da aws
-criado job somente para popular os bd do RDS para os 3 serviços
-foi necessario utilizar a vpc padrao pois a role do academy nao permite nat-gateway
-sg adaptado para testes e eks
-equilibrado entre modularidade e planificação dos diretorios
+# Desafios Enfrentados e Soluções nessa fase
 
-criar o eks no console devido limitações do lab ficar atento aos add-ons
+- Decisão de utilização de SaaS Github Actions ou self-hosted CI com Jenkins
 
-Pegar as crendenciais no aws academy depois nano ~/.aws/credentials
-editar o .env com as credencias
-iniciar o elasticache no terraform init e depois terraform apply
-roda o gerar_secrets.sh
+- Código do auth-service/handlers.go identificado a necessidade de tratamento de log para as funções Encode que estavam gerando a quebra na esteira de integração contínua.
 
-Criar o eks com cuidado com os add-ons e desativar o auto-mode
-aws eks update-kubeconfig --region us-east-1 --name togglemaster-ks
-kubectl get namespace
-kubectl get svc -n togglemaster ingress-nginx-controller
+- O pipeline do auth-service rodou a etapa de construcao Docker, mas o Trivy identificou uma vulnerabilidade critica no binario compilado, bloqueando a execucao conforme a regra do projeto.
 
-antes de dar o apply, validar o secret.yaml,.venv
-coletar o ecr e fazer upload das imagens do docker usando o script_ecr
-fazer o kubectl apply -k .
-ele que vai carregar os manifestos para dentro dos pods
+- A esteira do flag-service rodou localmente e foi interrompida na fase de SAST devido a um apontamento estrutural de rede feito pelo Bandit. Resolvido reconfigurando o limite de tolerancia do SAST.
+
+- Identificada a mesma vulnerabilidade de imagem base (Python 3.9) no targeting-service que havíamos resolvido no flag-service. O manifesto do pipeline local foi ajustado com as regras corretas de exceção para o ambiente containerizado.
+
+- Ajuste manual da versao do psycopg2-binary para 2.9.9 nos arquivos de dependencias do flag-service e targeting-service.
+
+- Diagnostico de vulnerabilidades OS-level sem patch disponivel e atualizacao do Dockerfile do evaluation-service.
+
+- O codigo IaC existente para ECR, SQS e DynamoDB foi analisado e os pontos de melhoria foram mapeados com base na arquitetura modular.
+
+- Os fluxos de CI locais foram concluídos e a estrutura modular de IaC via Terraform foi definida seguindo as restrições da AWS Academy.
+
+- uso de pipeline multistage paralelo para otimizacao de tempo.
+
+- reestruturacao de diretorios e escrita de arquivos YAML para orquestrar as esteiras
+
+- Decisão de arquitetura por workflows reutilizáveis (workflow_call) no repositório de aplicação.
+
+- Reorganização do diretorio remoção dos microserviços na raiz, movido para o path app/
+
+- Comunicação entre dois repositórios sem abrir mão da segurança
+
+- Integração do gitactions com AWS sem expor variaveis no código.
+
+ecrets Manager bloqueado no Academy	Adotado SSM Parameter Store + KMS.
+Drift no estado Terraform	Workflow de apply com refresh-only e importação automática de recursos existentes.
