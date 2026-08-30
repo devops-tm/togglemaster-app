@@ -44,3 +44,39 @@ resource "aws_ssm_parameter" "redis_secret" {
     Service     = "redis"
   }
 }
+
+# Gerar chaves aleatórias para evaluation-service
+resource "random_password" "master_key" {
+  length  = 32
+  special = false
+}
+
+resource "random_password" "service_api_key" {
+  length  = 32
+  special = false
+}
+
+# Armazenar no SSM
+resource "aws_ssm_parameter" "master_key" {
+  name        = "/togglemaster/prod/evaluation/master_key"
+  description = "MASTER_KEY para evaluation-service"
+  type        = "SecureString"
+  value       = random_password.master_key.result
+  tags = {
+    Project     = "ToggleMaster"
+    Environment = "AWSAcademy"
+    Service     = "evaluation"
+  }
+}
+
+resource "aws_ssm_parameter" "service_api_key" {
+  name        = "/togglemaster/prod/evaluation/service_api_key"
+  description = "SERVICE_API_KEY para evaluation-service"
+  type        = "SecureString"
+  value       = random_password.service_api_key.result
+  tags = {
+    Project     = "ToggleMaster"
+    Environment = "AWSAcademy"
+    Service     = "evaluation"
+  }
+}

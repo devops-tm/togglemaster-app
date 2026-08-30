@@ -164,7 +164,7 @@ togglemaster-app/
 └── README.md
 ```
 
-> Os microsserviços foram movidos para o diretório `app/` para manter a raiz do repositório organizada.
+> Os microsserviços foram movidos para o diretório `src/` para manter a raiz do repositório organizada.
 
 ---
 

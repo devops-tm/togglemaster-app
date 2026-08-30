@@ -32,3 +32,5 @@
 
 ecrets Manager bloqueado no Academy	Adotado SSM Parameter Store + KMS.
 Drift no estado Terraform	Workflow de apply com refresh-only e importação automática de recursos existentes.
+
+- A role do lab não permite usar o Secrets Manager e o External Secrets Operator, dificultando decisões práticas para não expor secrets em logs.
