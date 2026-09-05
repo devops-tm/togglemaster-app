@@ -58,6 +58,7 @@ jobs:
         with:
           version: latest
           working-directory: ${{ inputs.service-path }}
+          args: --go=${{ inputs.go-version }}
 
   security-scan:
     name: Security Scan (SAST & SCA)

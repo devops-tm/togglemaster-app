@@ -46,7 +46,7 @@ Este é o serviço de autenticação do projeto ToggleMaster. Ele é responsáve
 
 Você pode usar `curl` ou Postman.
 
-**1. Verifique a Saúde (Health Check):**
+**1. Health Check:**
 ```bash
 curl http://localhost:8001/health
 ```
