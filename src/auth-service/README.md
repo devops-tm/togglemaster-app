@@ -44,7 +44,7 @@ Este é o serviço de autenticação do projeto ToggleMaster. Ele é responsáve
 
 ## Testando os Endpoints
 
-Você pode usar `curl` ou Postman.
+Pode usar `curl` ou Postman.
 
 **1. Health Check:**
 ```bash
