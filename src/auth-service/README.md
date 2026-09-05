@@ -42,7 +42,7 @@ Este é o serviço de autenticação do projeto ToggleMaster. Ele é responsáve
     ```
     O servidor estará rodando em `http://localhost:8001`.
 
-## 🧪 Testando os Endpoints
+## Testando os Endpoints
 
 Você pode usar `curl` ou Postman.
 
