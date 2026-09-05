@@ -1,7 +1,26 @@
-FROM python:3.12-slim
-WORKDIR /app
+FROM python:3.11.15-alpine AS builder
+WORKDIR /build
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+
+RUN pip install \
+    --no-cache-dir \
+    --prefix=/install \
+    -r requirements.txt
+
+# FROM python:3.11-slim
+FROM python:3.11.15-alpine
+
+RUN apk update && apk add --no-cache \
+    iputils \
+    iproute2 \
+    traceroute \
+    htop \
+    netcat-openbsd \
+    curl \
+    ca-certificates
+
+WORKDIR /app
+
+COPY --from=builder /install /usr/local
 COPY . .
 EXPOSE 8002
-CMD ["gunicorn", "--bind", "0.0.0.0:8002", "app:app"]
