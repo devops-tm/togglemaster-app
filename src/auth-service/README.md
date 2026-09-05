@@ -5,7 +5,7 @@ Este é o serviço de autenticação do projeto ToggleMaster. Ele é responsáve
 ## Pré-requisitos (Local)
 
 * [Go](https://go.dev/doc/install) (versão 1.21 ou superior)
-* [PostgreSQL](https://www.postgresql.org/download/) (rodando localmente ou em um contêiner Docker)
+* [PostgreSQL] (rodando localmente ou em um contêiner Docker)
 
 ## 🚀 Rodando Localmente
 
