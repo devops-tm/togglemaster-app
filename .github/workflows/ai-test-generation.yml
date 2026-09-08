@@ -83,7 +83,7 @@ jobs:
           cache: 'pip'
 
       - name: Setup Go (para serviços Go)
-        if: matrix.service != 'analytics'  # analytics é Python
+        if: matrix.service != 'analytics'
         uses: actions/setup-go@v5
         with:
           go-version: '1.24'
@@ -129,44 +129,39 @@ jobs:
           # Detecta linguagem automaticamente e gera testes
           python scripts/ai_test_generator.py "$MAIN_FILE" -o "tests/test_${{ matrix.service }}_generated"
 
-      - name: Run generated tests (Go)
-        if: matrix.service != 'analytics'
+      - name: Run generated tests (auto-detect)
         run: |
-          echo "🔍 Procurando arquivos de teste em tests/..."
+          echo "🔍 Procurando arquivos de teste gerados..."
           ls -la tests/ || echo "Diretório tests vazio"
           
-          # Busca flexível pelo arquivo gerado
-          TEST_FILE=$(find tests/ -name "test_${{ matrix.service }}_generated*.go" | head -1)
+          # Procura por qualquer arquivo de teste gerado (Go ou Python)
+          TEST_FILE=$(find tests/ -name "test_${{ matrix.service }}_generated.*" | head -1)
+          
           if [ -z "$TEST_FILE" ]; then
             echo "⚠️ Nenhum teste gerado para o serviço ${{ matrix.service }}"
             exit 0
           fi
           
-          echo "📦 Executando testes Go em ambiente isolado com $TEST_FILE..."
-          mkdir -p /tmp/go-test-run
-          cp "$TEST_FILE" /tmp/go-test-run/
-          cd /tmp/go-test-run
+          EXT="${TEST_FILE##*.}"
+          echo "📄 Arquivo encontrado: $TEST_FILE (extensão: $EXT)"
           
-          go mod init test
-          go mod tidy
-          go test -v ./... || echo "⚠️ Testes falharam (gerados por IA)"
-          cd -
-
-      - name: Run generated tests (Python)
-        if: matrix.service == 'analytics'
-        run: |
-          echo "🔍 Procurando arquivos de teste Python..."
-          ls -la tests/ || echo "Diretório tests vazio"
-          
-          TEST_FILE=$(find tests/ -name "test_${{ matrix.service }}_generated*.py" | head -1)
-          if [ -z "$TEST_FILE" ]; then
-            echo "⚠️ Nenhum teste gerado para o serviço ${{ matrix.service }}"
-            exit 0
+          if [ "$EXT" == "go" ]; then
+            echo "📦 Executando testes Go..."
+            mkdir -p /tmp/go-test-run
+            cp "$TEST_FILE" /tmp/go-test-run/
+            cd /tmp/go-test-run
+            go mod init test
+            go mod tidy
+            go test -v ./... || echo "⚠️ Testes falharam (gerados por IA)"
+            cd -
+          elif [ "$EXT" == "py" ]; then
+            echo "🐍 Executando testes Python..."
+            pip install pytest pytest-cov
+            pytest "$TEST_FILE" -v --tb=short || echo "⚠️ Testes falharam (gerados por IA)"
+          else
+            echo "⚠️ Extensão não suportada: $EXT"
+            exit 1
           fi
-          
-          echo "📦 Executando testes Python: $TEST_FILE"
-          pip install pytest pytest-cov
-          pytest "$TEST_FILE" -v --tb=short || echo "⚠️ Testes falharam (gerados por IA)"
 
       - name: Upload generated tests artifact
         if: always()
