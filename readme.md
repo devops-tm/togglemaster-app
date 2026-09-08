@@ -11,7 +11,7 @@
 ToggleMaster é um sistema de gerenciamento de feature flags baseado em microsserviços. O projeto permite o controle dinâmico da liberação de funcionalidades em aplicações, gerenciando regras de segmentação de usuários e a avaliação de flags.
 
 
-![Diagrama da Arquitetura](./docs/diagrama_fase3.png)
+![Diagrama da Arquitetura](./docs/diagrama_fase3.jpg)
 
 ---
 
