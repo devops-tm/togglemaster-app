@@ -138,27 +138,25 @@ jobs:
         if: matrix.service != 'analytics'
         run: |
           go mod download || true
-          go install github.com/stretchr/testify/assert@latest
+          go get github.com/stretchr/testify@latest
 
-      - name: Run generated tests
-        id: run-tests
-        continue-on-error: true
+      - name: Run generated tests (Go)
+        if: matrix.service != 'analytics'
         run: |
-          TEST_FILE="tests/test_${{ matrix.service }}_generated"
-          if [ "${{ matrix.service }}" == "analytics" ]; then
-            # Python
-            if [ -f "${TEST_FILE}.py" ]; then
-              pytest "${TEST_FILE}.py" -v --tb=short || echo "⚠️ Testes falharam"
-            else
-              echo "Nenhum teste gerado"
-            fi
+          TEST_DIR="tests"
+          TEST_FILE="${TEST_DIR}/test_${{ matrix.service }}_generated.go"
+          if [ -f "$TEST_FILE" ]; then
+            # Cria um diretório temporário com um go.mod válido
+            mkdir -p /tmp/test-run
+            cp "$TEST_FILE" /tmp/test-run/
+            cd /tmp/test-run
+            # Inicializa um módulo temporário (se não existir)
+            go mod init test 2>/dev/null || true
+            go mod tidy 2>/dev/null || true
+            # Executa os testes
+            go test -v ./... || echo "⚠️ Testes falharam (gerados por IA)"
           else
-            # Go
-            if [ -f "${TEST_FILE}.go" ]; then
-              go test -v "${TEST_FILE}.go" || echo "⚠️ Testes falharam"
-            else
-              echo "Nenhum teste gerado"
-            fi
+            echo "Nenhum teste gerado para o serviço ${{ matrix.service }}"
           fi
 
       - name: Upload generated tests artifact
