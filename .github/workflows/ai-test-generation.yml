@@ -129,34 +129,33 @@ jobs:
           # Detecta linguagem automaticamente
           python scripts/ai_test_generator.py "$MAIN_FILE" -o "tests/test_${{ matrix.service }}_generated"
 
-      - name: Install test dependencies (Python)
-        if: matrix.service == 'analytics'
-        run: |
-          pip install pytest pytest-cov
-
-      - name: Install test dependencies (Go)
-        if: matrix.service != 'analytics'
-        run: |
-          go mod download || true
-          go get github.com/stretchr/testify@latest
-
       - name: Run generated tests (Go)
         if: matrix.service != 'analytics'
         run: |
-          TEST_DIR="tests"
-          TEST_FILE="${TEST_DIR}/test_${{ matrix.service }}_generated.go"
+          TEST_FILE="tests/test_${{ matrix.service }}_generated.go"
           if [ -f "$TEST_FILE" ]; then
-            # Cria um diretório temporário com um go.mod válido
-            mkdir -p /tmp/test-run
-            cp "$TEST_FILE" /tmp/test-run/
-            cd /tmp/test-run
-            # Inicializa um módulo temporário (se não existir)
-            go mod init test 2>/dev/null || true
-            go mod tidy 2>/dev/null || true
-            # Executa os testes
+            echo "📦 Executando testes Go em ambiente isolado..."
+            mkdir -p /tmp/go-test-run
+            cp "$TEST_FILE" /tmp/go-test-run/
+            cd /tmp/go-test-run
+            go mod init test
+            go mod edit -require github.com/stretchr/testify@latest
+            go mod tidy
             go test -v ./... || echo "⚠️ Testes falharam (gerados por IA)"
+            cd -
           else
             echo "Nenhum teste gerado para o serviço ${{ matrix.service }}"
+          fi
+
+      - name: Run generated tests (Python)
+        if: matrix.service == 'analytics'
+        run: |
+          TEST_FILE="tests/test_${{ matrix.service }}_generated.py"
+          if [ -f "$TEST_FILE" ]; then
+            pip install pytest pytest-cov
+            pytest "$TEST_FILE" -v --tb=short || echo "⚠️ Testes falharam"
+          else
+            echo "Nenhum teste gerado"
           fi
 
       - name: Upload generated tests artifact
