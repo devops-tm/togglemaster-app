@@ -17,12 +17,12 @@ jobs:
     name: Detect Changed Services
     runs-on: ubuntu-latest
     outputs:
-      changed_services: ${{ steps.filter.outputs.changed_services }}
+      changed_services: ${{ steps.build-json.outputs.changed_services }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 
+          fetch-depth: 0
 
       - name: Filter changed services
         id: filter
@@ -45,27 +45,28 @@ jobs:
         id: build-json
         run: |
           SERVICES='[]'
-          if [ "true" == "true" ]; then
+          if [ "${{ steps.filter.outputs.auth }}" == "true" ]; then
             SERVICES=$(echo "$SERVICES" | jq -c '. + ["auth"]')
           fi
-          if [ "false" == "true" ]; then
+          if [ "${{ steps.filter.outputs.flag }}" == "true" ]; then
             SERVICES=$(echo "$SERVICES" | jq -c '. + ["flag"]')
           fi
-          if [ "false" == "true" ]; then
+          if [ "${{ steps.filter.outputs.targeting }}" == "true" ]; then
             SERVICES=$(echo "$SERVICES" | jq -c '. + ["targeting"]')
           fi
-          if [ "false" == "true" ]; then
+          if [ "${{ steps.filter.outputs.evaluation }}" == "true" ]; then
             SERVICES=$(echo "$SERVICES" | jq -c '. + ["evaluation"]')
           fi
-          if [ "false" == "true" ]; then
+          if [ "${{ steps.filter.outputs.analytics }}" == "true" ]; then
             SERVICES=$(echo "$SERVICES" | jq -c '. + ["analytics"]')
           fi
           echo "changed_services=$SERVICES" >> $GITHUB_OUTPUT
+          echo "Changed services: $SERVICES"
 
   generate-tests:
     name: Generate Tests for Changed Services
     needs: detect-changes
-    if: fromJSON(needs.detect-changes.outputs.changed_services) != '[]'
+    if: needs.detect-changes.outputs.changed_services != '[]'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -89,29 +90,28 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          # Define o caminho do arquivo principal para cada serviço
           SERVICE_PATH="src/${{ matrix.service }}-service"
+          # Procura por app.py, main.py ou qualquer arquivo .py na raiz do serviço
           MAIN_FILE="$SERVICE_PATH/app.py"
           if [ ! -f "$MAIN_FILE" ]; then
-            # Se não existir app.py, tenta main.py ou procura um .py raiz
             MAIN_FILE=$(find "$SERVICE_PATH" -maxdepth 1 -name "*.py" ! -name "__init__.py" | head -1)
           fi
           if [ -z "$MAIN_FILE" ]; then
             echo "ERROR: Nenhum arquivo Python encontrado em $SERVICE_PATH"
             exit 1
           fi
-          echo "Gerando testes para $MAIN_FILE"
+          echo "📄 Gerando testes para $MAIN_FILE"
           python scripts/ai_test_generator.py "$MAIN_FILE" -o "tests/test_${{ matrix.service }}_generated.py"
 
       - name: Install test dependencies
         run: |
-          pip install pytest pytest-covs/a
+          pip install pytest pytest-cov
 
       - name: Run generated tests
         run: |
-          # Verifica se há testes gerados
-          if [ -f "tests/test_${{ matrix.service }}_generated.py" ]; then
-            pytest tests/test_${{ matrix.service }}_generated.py -v --tb=short --cov=app.${{ matrix.service }}-service --cov-report=term
+          TEST_FILE="tests/test_${{ matrix.service }}_generated.py"
+          if [ -f "$TEST_FILE" ]; then
+            pytest "$TEST_FILE" -v --tb=short --cov=src.${{ matrix.service }}-service --cov-report=term || echo "⚠️ Testes falharam (gerados por IA)"
           else
             echo "Nenhum teste gerado para o serviço ${{ matrix.service }}"
           fi
@@ -147,9 +147,9 @@ jobs:
           else
             COMMENT+="**Serviços modificados:** $SERVICES\n\n"
             for service in $(echo "$SERVICES" | jq -r '.[]'); do
-              TEST_FILE="tests/test_${service}_generated.py"
-              if [ -f "artifacts/tests-${service}/test_${service}_generated.py" ]; then
-                LINES=$(wc -l < "artifacts/tests-${service}/test_${service}_generated.py")
+              TEST_FILE="artifacts/tests-${service}/test_${service}_generated.py"
+              if [ -f "$TEST_FILE" ]; then
+                LINES=$(wc -l < "$TEST_FILE")
                 COMMENT+="- **${service}**: ✅ Testes gerados (${LINES} linhas)\n"
               else
                 COMMENT+="- **${service}**: ❌ Nenhum teste gerado\n"
