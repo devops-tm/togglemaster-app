@@ -45,20 +45,20 @@ jobs:
         id: build-json
         run: |
           SERVICES='[]'
-          if [ "${{ steps.filter.outputs.auth }}" == "true" ]; then
-            SERVICES=$(echo "$SERVICES" | jq '. += ["auth"]')
+          if [ "true" == "true" ]; then
+            SERVICES=$(echo "$SERVICES" | jq -c '. + ["auth"]')
           fi
-          if [ "${{ steps.filter.outputs.flag }}" == "true" ]; then
-            SERVICES=$(echo "$SERVICES" | jq '. += ["flag"]')
+          if [ "false" == "true" ]; then
+            SERVICES=$(echo "$SERVICES" | jq -c '. + ["flag"]')
           fi
-          if [ "${{ steps.filter.outputs.targeting }}" == "true" ]; then
-            SERVICES=$(echo "$SERVICES" | jq '. += ["targeting"]')
+          if [ "false" == "true" ]; then
+            SERVICES=$(echo "$SERVICES" | jq -c '. + ["targeting"]')
           fi
-          if [ "${{ steps.filter.outputs.evaluation }}" == "true" ]; then
-            SERVICES=$(echo "$SERVICES" | jq '. += ["evaluation"]')
+          if [ "false" == "true" ]; then
+            SERVICES=$(echo "$SERVICES" | jq -c '. + ["evaluation"]')
           fi
-          if [ "${{ steps.filter.outputs.analytics }}" == "true" ]; then
-            SERVICES=$(echo "$SERVICES" | jq '. += ["analytics"]')
+          if [ "false" == "true" ]; then
+            SERVICES=$(echo "$SERVICES" | jq -c '. + ["analytics"]')
           fi
           echo "changed_services=$SERVICES" >> $GITHUB_OUTPUT
 
