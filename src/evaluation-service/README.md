@@ -15,7 +15,7 @@ Ele funciona da seguinte forma:
 5.  Retorna `true` ou `false` para o cliente.
 6.  Envia *assincronamente* um evento da decisão para uma fila **AWS SQS**.
 
-## 📦 Pré-requisitos (Local)
+## Pré-requisitos (Local)
 
 * [Go](https://go.dev/doc/install) (versão 1.21 ou superior)
 * [Redis](https://redis.io/docs/getting-started/installation/) (rodando localmente ou em Docker)
