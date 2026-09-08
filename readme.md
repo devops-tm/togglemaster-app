@@ -44,6 +44,9 @@ O ToggleMaster é composto por 5 microsserviços:
 
 Todos os serviços são implantados em um cluster Kubernetes (EKS) e se comunicam com bancos de dados e serviços gerenciados na AWS.
 
+GitOps Repo: [Deploy](https://github.com/devops-tm/togglemaster-app)
+
+
 ---
 
 ## Tecnologias
