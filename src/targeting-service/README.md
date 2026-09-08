@@ -4,7 +4,7 @@ Este é o serviço de regras de segmentação (targeting) do projeto ToggleMaste
 
 **IMPORTANTE:** Este serviço também é protegido e depende que o `auth-service` esteja rodando (ex: em `http://localhost:8001`).
 
-## 📦 Pré-requisitos (Local)
+## Pré-requisitos (Local)
 
 * [Python](https://www.python.org/) (versão 3.9 ou superior)
 * [PostgreSQL](https://www.postgresql.org/download/)
