@@ -4,7 +4,7 @@ Este é o serviço de CRUD (Create, Read, Update, Delete) do projeto ToggleMaste
 
 **IMPORTANTE:** Este serviço é protegido e depende que o `auth-service` esteja rodando. Todas as requisições (exceto `/health`) exigem um header `Authorization: Bearer <sua-chave-api>`.
 
-## 📦 Pré-requisitos (Local)
+## Pré-requisitos (Local)
 
 * [Python](https://www.python.org/) (versão 3.9 ou superior)
 * [PostgreSQL](https://www.postgresql.org/download/) (rodando localmente ou em um contêiner Docker)
