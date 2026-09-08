@@ -3,22 +3,16 @@
 <div align="center">
 
 ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/devops-tm/togglemaster-app/ai-test-generation.yml?branch=main&label=Test%20Generation&style=for-the-badge)
-![GitHub last commit](https://img.shields.io/github/last-commit/devops-tm/togglemaster-app?style=for-the-badge&color=blueviolet)
-![GitHub issues](https://img.shields.io/github/issues/devops-tm/togglemaster-app?style=for-the-badge&color=orange)
-![GitHub pull requests](https://img.shields.io/github/issues-pr/devops-tm/togglemaster-app?style=for-the-badge&color=green)
-![GitHub stars](https://img.shields.io/github/stars/devops-tm/togglemaster-app?style=for-the-badge&color=yellow)
-![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)
 [![Made with Gemini](https://img.shields.io/badge/Made%20with-Gemini-8A2BE2?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
 [![Go version](https://img.shields.io/badge/Go-1.24-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev/)
 [![Python version](https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org/)
 [![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-2088FF?style=for-the-badge&logo=github-actions&logoColor=white)](https://github.com/features/actions)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=for-the-badge)](http://makeapullrequest.com)
 
 </div>
 
 ---
 
-## 📋 Visão Geral
+## Visão Geral
 
 Este módulo automatiza a geração de testes unitários para microserviços **Go** e **Python** utilizando a API do **Google Gemini**. O fluxo é acionado em **Pull Requests (PRs)** ou **pushes** na branch `main`, detecta quais serviços foram alterados e gera testes específicos para eles.
 
@@ -70,7 +64,7 @@ graph TD
 
 ```
 
-## 🚀 Fluxo de Trabalho
+## Fluxo de Trabalho
 
 ```mermaid
 graph LR
@@ -84,7 +78,7 @@ graph LR
 
 ---
 
-## 🔧 Pré-requisitos
+## Pré-requisitos
 
 ### 1. Chave de API do Google Gemini
 
@@ -106,7 +100,7 @@ Adicione a chave como **secret** no repositório ou organização:
 
 ---
 
-## 📂 Estrutura de Diretórios
+## Estrutura de Diretórios
 
 ```
 .
@@ -131,27 +125,12 @@ Adicione a chave como **secret** no repositório ou organização:
 
 ---
 
-## 🧠 Script `ai_test_generator.py`
+## Script `ai_test_generator.py`
 
 ### Propósito
 
 O script lê um arquivo fonte, detecta a linguagem (Go ou Python), envia o código para o Gemini e extrai os testes gerados.
 
-### Uso local (desenvolvimento)
-
-```bash
-# Instalar dependências
-pip install google-genai
-
-# Gerar testes para um serviço Go
-python scripts/ai_test_generator.py src/auth-service/main.go -o tests/test_auth_generated
-
-# Gerar testes para um serviço Python (com pytest)
-python scripts/ai_test_generator.py src/analytics-service/app.py -o tests/test_analytics_generated -f pytest
-
-# Forçar linguagem manualmente
-python scripts/ai_test_generator.py src/flag-service/main.go --lang go
-```
 
 ### Argumentos
 
@@ -170,7 +149,7 @@ O script possui **5 tentativas automáticas** com **backoff exponencial** (1s, 2
 
 ---
 
-## ⚙️ Workflow `ai-test-generation.yml`
+## Workflow `ai-test-generation.yml`
 
 ### Gatilhos (Triggers)
 
@@ -215,7 +194,7 @@ permissions:
 
 ---
 
-## 🧪 Execução dos Testes
+## Execução dos Testes
 
 ### Go
 
@@ -232,26 +211,26 @@ O workflow:
 3. Instala `pytest` e `pytest-cov`.
 4. Executa `pytest -v`.
 
-> ⚠️ **Os testes são gerados por IA e podem conter erros.** O pipeline não falha se os testes falharem – apenas exibe um aviso. O artefato fica disponível para revisão manual.
+> O pipeline não falha se os testes falharem – apenas exibe um aviso. O artefato fica disponível para revisão manual.
 
 ---
 
-## 📊 Exemplo de Comentário no PR
+## Exemplo de Comentário no PR
 
 ```markdown
-## 🤖 AI Test Generation (Gemini)
+## AI Test Generation (Gemini)
 
 **Serviços modificados:** ["auth", "flag"]
 
 - **auth** (.go): ✅ Testes gerados (127 linhas)
 - **flag** (.go): ✅ Testes gerados (98 linhas)
 
-> ⚠️ **Os testes foram gerados por IA e podem conter erros. Revise antes de mesclar.**
+> **Os testes foram gerados por IA e podem conter erros. Revise antes de mesclar.**
 ```
 
 ---
 
-## 🔍 Como Revisar os Testes Gerados
+## Como Revisar os Testes Gerados
 
 1. Acesse a **página do workflow** no GitHub Actions.
 2. Na seção **Artifacts**, baixe o arquivo `tests-<servico>.zip`.
@@ -259,7 +238,7 @@ O workflow:
 
 ---
 
-## 🐛 Solução de Problemas (Troubleshooting)
+## Solução de Problemas (Troubleshooting)
 
 | Problema | Causa | Solução |
 |----------|-------|---------|
