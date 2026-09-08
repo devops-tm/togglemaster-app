@@ -30,7 +30,7 @@ except ImportError:
     USE_NEW_API = False
     print("Usando API google.generativeai (fallback)")
 
-def generate_with_retry(prompt: str, model_name: str = "gemini-3.8-flash", max_retries: int = 5) -> Optional[str]:
+def generate_with_retry(prompt: str, model_name: str = "gemini-3.5-flash-lite", max_retries: int = 5) -> Optional[str]:
     """
     Gera conteúdo com retry automático para erros 503 (sobrecarga) e 500.
     """
@@ -110,7 +110,7 @@ def generate_tests_go(source_code: str, filename: str) -> Optional[str]:
     }}
     ```
     """
-    return generate_with_retry(prompt, "gemini-3.8-flash")
+    return generate_with_retry(prompt, "gemini-3.1-flash-lite")
 
 def generate_tests_python(source_code: str, filename: str, framework: str = "pytest") -> Optional[str]:
     test_import = "import pytest" if framework == "pytest" else "import unittest"
