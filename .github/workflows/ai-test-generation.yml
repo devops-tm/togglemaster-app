@@ -90,7 +90,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install google-generativeai
+          pip install google-genai
 
       - name: Find main file and generate tests
         id: generate

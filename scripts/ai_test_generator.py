@@ -9,20 +9,67 @@ import sys
 import json
 import argparse
 import re
+import time
 from pathlib import Path
 from typing import Optional
-import google.generativeai as genai
+
+# ============================================================
+# CONFIGURAÇÃO DA API - Usando a nova SDK recomendada
+# ============================================================
 
 API_KEY = os.getenv("GEMINI_API_KEY")
 if not API_KEY:
     print("ERRO: GEMINI_API_KEY não definida")
     sys.exit(1)
 
-genai.configure(api_key=API_KEY)
-MODEL = genai.GenerativeModel('gemini-3.8-flash')
+# Tenta usar a nova API (google.genai) primeiro
+try:
+    from google import genai
+    client = genai.Client(api_key=API_KEY)
+    USE_NEW_API = True
+    print("Usando API google.genai (recomendada)")
+except ImportError:
+    # Fallback para a API antiga (atenção: será descontinuada)
+    import google.generativeai as genai
+    genai.configure(api_key=API_KEY)
+    USE_NEW_API = False
+    print("Usando API google.generativeai (fallback - considere migrar)")
+
+def generate_with_retry(prompt: str, model_name: str = "gemini-1.5-flash", max_retries: int = 3) -> Optional[str]:
+    """
+    Gera conteúdo com retry automático em caso de erro 500.
+    Usa gemini-1.5-flash por ser mais estável que o pro.
+    """
+    for attempt in range(max_retries):
+        try:
+            if USE_NEW_API:
+                # Nova API: google.genai
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt
+                )
+                return response.text
+            else:
+                # API antiga: google.generativeai
+                model = genai.GenerativeModel(model_name)
+                response = model.generate_content(prompt)
+                return response.text
+                
+        except Exception as e:
+            error_msg = str(e)
+            # Verifica se é um erro 500 (Internal Error)
+            if "500" in error_msg or "INTERNAL" in error_msg:
+                print(f"⚠️ Tentativa {attempt + 1}/{max_retries} falhou com erro 500. Aguardando {2 ** attempt} segundos...")
+                time.sleep(2 ** attempt)  # Backoff exponencial: 1s, 2s, 4s
+            else:
+                # Outro tipo de erro, não tenta novamente
+                print(f"❌ Erro não recuperável: {e}")
+                return None
+    
+    print("❌ Todas as tentativas falharam com erro 500.")
+    return None
 
 def detect_language(filepath: str) -> str:
-    """Detecta a linguagem baseado na extensão do arquivo"""
     ext = Path(filepath).suffix.lower()
     if ext == '.go':
         return 'go'
@@ -36,7 +83,6 @@ def read_file(filepath: str) -> str:
         return f.read()
 
 def generate_tests_go(source_code: str, filename: str) -> Optional[str]:
-    """Gera testes Go usando a IA"""
     prompt = f"""
     Você é um engenheiro de QA especialista em Go. Gere testes unitários completos para o seguinte código Go.
 
@@ -48,31 +94,25 @@ def generate_tests_go(source_code: str, filename: str) -> Optional[str]:
     ```
 
     Requisitos:
-    1. Use o pacote "testing" e a biblioteca padrão
+    1. Use o pacote "testing"
     2. Use testify/assert ou apenas testing
     3. Cubra casos normais, borda e exceções
-    4. Inclua mocks onde necessário (ex: interfaces)
-    5. Gere APENAS o código dos testes, sem explicações
+    4. Inclua mocks onde necessário
+    5. Gere APENAS o código dos testes
     6. Use o padrão: func TestXxx(t *testing.T)
 
     Formato de saída:
     ```go
-    package main // ou o pacote correto
+    package main
 
     import "testing"
 
-    func TestXxx(t *testing.T) { ... }
+    func TestXxx(t *testing.T) {{ ... }}
     ```
     """
-    try:
-        response = MODEL.generate_content(prompt)
-        return response.text
-    except Exception as e:
-        print(f"Erro ao gerar testes Go: {e}", file=sys.stderr)
-        return None
+    return generate_with_retry(prompt, "gemini-1.5-flash")
 
 def generate_tests_python(source_code: str, filename: str, framework: str = "pytest") -> Optional[str]:
-    """Gera testes Python usando a IA"""
     test_import = "import pytest" if framework == "pytest" else "import unittest"
     prompt = f"""
     Você é um engenheiro de QA especialista em Python. Gere testes unitários completos para o seguinte código.
@@ -85,11 +125,10 @@ def generate_tests_python(source_code: str, filename: str, framework: str = "pyt
     ```
 
     Requisitos:
-    1. Use {framework} como framework de teste
+    1. Use {framework}
     2. Cubra casos normais, borda e exceções
-    3. Inclua mocks onde necessário (ex: requests, banco de dados)
-    4. Gere APENAS o código dos testes, sem explicações
-    5. Use fixtures quando apropriado
+    3. Inclua mocks onde necessário
+    4. Gere APENAS o código dos testes
 
     Formato de saída:
     ```python
@@ -97,15 +136,9 @@ def generate_tests_python(source_code: str, filename: str, framework: str = "pyt
     # Testes gerados aqui
     ```
     """
-    try:
-        response = MODEL.generate_content(prompt)
-        return response.text
-    except Exception as e:
-        print(f"Erro ao gerar testes Python: {e}", file=sys.stderr)
-        return None
+    return generate_with_retry(prompt, "gemini-1.5-flash")
 
 def extract_code(text: str) -> str:
-    """Extrai código de blocos ```lang ... ```"""
     pattern = r"```(?:\w+)?\n(.*?)```"
     match = re.search(pattern, text, re.DOTALL)
     if match:
@@ -115,12 +148,9 @@ def extract_code(text: str) -> str:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('source', help="Arquivo fonte")
-    parser.add_argument('--lang', choices=['go', 'python', 'auto'], default='auto',
-                        help="Linguagem (auto detecta)")
+    parser.add_argument('--lang', choices=['go', 'python', 'auto'], default='auto')
     parser.add_argument('-o', '--output', help="Arquivo de saída")
-    parser.add_argument('-f', '--framework', default='pytest',
-                        choices=['pytest', 'unittest'],
-                        help="Framework Python (default: pytest)")
+    parser.add_argument('-f', '--framework', default='pytest', choices=['pytest', 'unittest'])
     args = parser.parse_args()
 
     if not os.path.exists(args.source):
@@ -157,7 +187,7 @@ def main():
         sys.exit(1)
 
     if args.output:
-        output_file = args.output
+        output_file = args.output + ext
     else:
         base = Path(args.source).stem
         output_file = f"tests/test_{base}{ext}"
