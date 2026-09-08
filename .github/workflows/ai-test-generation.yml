@@ -31,15 +31,15 @@ jobs:
           base: ${{ github.event.pull_request.base.sha || github.event.before }}
           filters: |
             auth:
-              - 'app/auth-service/**'
+              - 'src/auth-service/**'
             flag:
-              - 'app/flag-service/**'
+              - 'src/flag-service/**'
             targeting:
-              - 'app/targeting-service/**'
+              - 'src/targeting-service/**'
             evaluation:
-              - 'app/evaluation-service/**'
+              - 'src/evaluation-service/**'
             analytics:
-              - 'app/analytics-service/**'
+              - 'src/analytics-service/**'
 
       - name: Build JSON of changed services
         id: build-json
@@ -90,7 +90,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           # Define o caminho do arquivo principal para cada serviço
-          SERVICE_PATH="app/${{ matrix.service }}-service"
+          SERVICE_PATH="src/${{ matrix.service }}-service"
           MAIN_FILE="$SERVICE_PATH/app.py"
           if [ ! -f "$MAIN_FILE" ]; then
             # Se não existir app.py, tenta main.py ou procura um .py raiz
@@ -105,7 +105,7 @@ jobs:
 
       - name: Install test dependencies
         run: |
-          pip install pytest pytest-cov
+          pip install pytest pytest-covs/a
 
       - name: Run generated tests
         run: |
