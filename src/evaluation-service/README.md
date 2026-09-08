@@ -22,7 +22,7 @@ Ele funciona da seguinte forma:
 * Os serviços `auth-service`, `flag-service` e `targeting-service` devem estar rodando.
 * **Credenciais da AWS:** Para o SQS funcionar, seu terminal deve estar autenticado na AWS (ex: via `aws configure` ou variáveis de ambiente).
 
-## 🚀 Rodando Localmente
+## Rodando Localmente
 
 1.  **Clone o repositório** e entre na pasta `evaluation-service`.
 
