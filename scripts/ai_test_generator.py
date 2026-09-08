@@ -84,22 +84,24 @@ def read_file(filepath: str) -> str:
 
 def generate_tests_go(source_code: str, filename: str) -> Optional[str]:
     prompt = f"""
-    Você é um engenheiro de QA especialista em Go. Gere testes unitários completos para o seguinte código Go.
+    Você é um engenheiro de QA especialista em Go. Gere testes unitários COMPLETOS E AUTO-SUFICIENTES para o seguinte código.
+
+    IMPORTANTE: Os testes devem ser executáveis isoladamente, sem depender do código original.
+    Use apenas a biblioteca padrão do Go (testing).
 
     Arquivo: {filename}
 
-    Código:
+    Código original:
     ```
     {source_code}
     ```
 
     Requisitos:
-    1. Use o pacote "testing"
-    2. Use testify/assert ou apenas testing
-    3. Cubra casos normais, borda e exceções
-    4. Inclua mocks onde necessário
-    5. Gere APENAS o código dos testes
-    6. Use o padrão: func TestXxx(t *testing.T)
+    1. Use apenas o pacote "testing" (sem dependências externas como testify)
+    2. Não importe pacotes do projeto original
+    3. Use funções auxiliares dentro do próprio arquivo de teste
+    4. Cubra os principais cenários: sucesso, erro, borda
+    5. Gere APENAS o código dos testes, sem explicações
 
     Formato de saída:
     ```go
@@ -107,33 +109,53 @@ def generate_tests_go(source_code: str, filename: str) -> Optional[str]:
 
     import "testing"
 
-    func TestXxx(t *testing.T) {{ ... }}
+    // Funções auxiliares (mocks/stubs) dentro do arquivo de teste
+    func mockConnectDB() string {{
+        return "mock-db-string"
+    }}
+
+    func TestXxx(t *testing.T) {{
+        // Implementação do teste
+        if result != expected {{
+            t.Errorf("expected %v, got %v", expected, result)
+        }}
+    }}
     ```
     """
-    return generate_with_retry(prompt, "gemini-3.5-flash-lite")
+    return generate_with_retry(prompt, "gemini-3.7-flash")
 
 def generate_tests_python(source_code: str, filename: str, framework: str = "pytest") -> Optional[str]:
     test_import = "import pytest" if framework == "pytest" else "import unittest"
     prompt = f"""
-    Você é um engenheiro de QA especialista em Python. Gere testes unitários completos para o seguinte código.
+    Você é um engenheiro de QA especialista em Python. Gere testes unitários AUTO-SUFICIENTES para o seguinte código.
+
+    IMPORTANTE: Os testes devem ser executáveis isoladamente, sem depender do código original.
+    Não importe módulos do projeto original. Use mocks/stubs internos.
 
     Arquivo: {filename}
 
-    Código:
+    Código original:
     ```
     {source_code}
     ```
 
     Requisitos:
     1. Use {framework}
-    2. Cubra casos normais, borda e exceções
-    3. Inclua mocks onde necessário
-    4. Gere APENAS o código dos testes
+    2. Não dependa de código externo
+    3. Defina funções auxiliares dentro do próprio arquivo de teste
+    4. Cubra cenários de sucesso e erro
+    5. Gere APENAS o código dos testes
 
     Formato de saída:
     ```python
     {test_import}
-    # Testes gerados aqui
+    # Funções auxiliares (mocks) internas
+    def mock_db():
+        return "mock-db"
+
+    def test_xxx():
+        # Implementação com mocks
+        pass
     ```
     """
     return generate_with_retry(prompt, "gemini-3.7-flash")
