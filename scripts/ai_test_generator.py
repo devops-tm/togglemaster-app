@@ -145,7 +145,7 @@ def generate_tests_python(source_code: str, filename: str, framework: str = "pyt
         assert mock_db() == "mock-db"
     ```
     """
-    return generate_with_retry(prompt, "gemini-3.8-flash")
+    return generate_with_retry(prompt, "gemini-3.1-flash-lite")
 
 def extract_code(text: str) -> str:
     pattern = r"```(?:\w+)?\n(.*?)```"
