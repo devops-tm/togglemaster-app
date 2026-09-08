@@ -1,0 +1,175 @@
+name: AI Test Generation (Gemini)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+jobs:
+  detect-changes:
+    name: Detect Changed Services
+    runs-on: ubuntu-latest
+    outputs:
+      changed_services: ${{ steps.filter.outputs.changed_services }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 
+
+      - name: Filter changed services
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          base: ${{ github.event.pull_request.base.sha || github.event.before }}
+          filters: |
+            auth:
+              - 'app/auth-service/**'
+            flag:
+              - 'app/flag-service/**'
+            targeting:
+              - 'app/targeting-service/**'
+            evaluation:
+              - 'app/evaluation-service/**'
+            analytics:
+              - 'app/analytics-service/**'
+
+      - name: Build JSON of changed services
+        id: build-json
+        run: |
+          SERVICES='[]'
+          if [ "${{ steps.filter.outputs.auth }}" == "true" ]; then
+            SERVICES=$(echo "$SERVICES" | jq '. += ["auth"]')
+          fi
+          if [ "${{ steps.filter.outputs.flag }}" == "true" ]; then
+            SERVICES=$(echo "$SERVICES" | jq '. += ["flag"]')
+          fi
+          if [ "${{ steps.filter.outputs.targeting }}" == "true" ]; then
+            SERVICES=$(echo "$SERVICES" | jq '. += ["targeting"]')
+          fi
+          if [ "${{ steps.filter.outputs.evaluation }}" == "true" ]; then
+            SERVICES=$(echo "$SERVICES" | jq '. += ["evaluation"]')
+          fi
+          if [ "${{ steps.filter.outputs.analytics }}" == "true" ]; then
+            SERVICES=$(echo "$SERVICES" | jq '. += ["analytics"]')
+          fi
+          echo "changed_services=$SERVICES" >> $GITHUB_OUTPUT
+
+  generate-tests:
+    name: Generate Tests for Changed Services
+    needs: detect-changes
+    if: fromJSON(needs.detect-changes.outputs.changed_services) != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.detect-changes.outputs.changed_services) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install google-generativeai
+
+      - name: Generate tests with Gemini
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          # Define o caminho do arquivo principal para cada serviço
+          SERVICE_PATH="app/${{ matrix.service }}-service"
+          MAIN_FILE="$SERVICE_PATH/app.py"
+          if [ ! -f "$MAIN_FILE" ]; then
+            # Se não existir app.py, tenta main.py ou procura um .py raiz
+            MAIN_FILE=$(find "$SERVICE_PATH" -maxdepth 1 -name "*.py" ! -name "__init__.py" | head -1)
+          fi
+          if [ -z "$MAIN_FILE" ]; then
+            echo "ERROR: Nenhum arquivo Python encontrado em $SERVICE_PATH"
+            exit 1
+          fi
+          echo "Gerando testes para $MAIN_FILE"
+          python scripts/ai_test_generator.py "$MAIN_FILE" -o "tests/test_${{ matrix.service }}_generated.py"
+
+      - name: Install test dependencies
+        run: |
+          pip install pytest pytest-cov
+
+      - name: Run generated tests
+        run: |
+          # Verifica se há testes gerados
+          if [ -f "tests/test_${{ matrix.service }}_generated.py" ]; then
+            pytest tests/test_${{ matrix.service }}_generated.py -v --tb=short --cov=app.${{ matrix.service }}-service --cov-report=term
+          else
+            echo "Nenhum teste gerado para o serviço ${{ matrix.service }}"
+          fi
+
+      - name: Upload generated tests artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tests-${{ matrix.service }}
+          path: tests/test_${{ matrix.service }}_generated.py
+
+  comment-pr:
+    name: Comment PR with results
+    if: github.event_name == 'pull_request'
+    needs: [detect-changes, generate-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Build comment body
+        id: build-comment
+        run: |
+          SERVICES="${{ needs.detect-changes.outputs.changed_services }}"
+          COMMENT="## 🤖 AI Test Generation (Gemini)\n\n"
+          if [ "$SERVICES" == "[]" ]; then
+            COMMENT+="Nenhum serviço foi alterado nesta PR."
+          else
+            COMMENT+="**Serviços modificados:** $SERVICES\n\n"
+            for service in $(echo "$SERVICES" | jq -r '.[]'); do
+              TEST_FILE="tests/test_${service}_generated.py"
+              if [ -f "artifacts/tests-${service}/test_${service}_generated.py" ]; then
+                LINES=$(wc -l < "artifacts/tests-${service}/test_${service}_generated.py")
+                COMMENT+="- **${service}**: ✅ Testes gerados (${LINES} linhas)\n"
+              else
+                COMMENT+="- **${service}**: ❌ Nenhum teste gerado\n"
+              fi
+            done
+          fi
+          COMMENT+="\n> ⚠️ **Os testes foram gerados por IA e podem conter erros. Revise antes de mesclar.**"
+          echo "comment_body=$COMMENT" >> $GITHUB_OUTPUT
+
+      - name: Find existing comment
+        uses: peter-evans/find-comment@v3
+        id: find-comment
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body-includes: 'AI Test Generation (Gemini)'
+
+      - name: Create or update comment
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+          edit-mode: replace
+          body: ${{ steps.build-comment.outputs.comment_body }}
