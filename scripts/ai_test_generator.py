@@ -35,10 +35,10 @@ except ImportError:
     USE_NEW_API = False
     print("Usando API google.generativeai (fallback - considere migrar)")
 
-def generate_with_retry(prompt: str, model_name: str = "gemini-1.5-flash", max_retries: int = 3) -> Optional[str]:
+def generate_with_retry(prompt: str, model_name: str = "gemini-3.8-flash", max_retries: int = 3) -> Optional[str]:
     """
     Gera conteúdo com retry automático em caso de erro 500.
-    Usa gemini-1.5-flash por ser mais estável que o pro.
+    Usa gemini-3.8-flash por ser mais estável que o pro.
     """
     for attempt in range(max_retries):
         try:
@@ -110,7 +110,7 @@ def generate_tests_go(source_code: str, filename: str) -> Optional[str]:
     func TestXxx(t *testing.T) {{ ... }}
     ```
     """
-    return generate_with_retry(prompt, "gemini-1.5-flash")
+    return generate_with_retry(prompt, "gemini-3.5-flash-lite")
 
 def generate_tests_python(source_code: str, filename: str, framework: str = "pytest") -> Optional[str]:
     test_import = "import pytest" if framework == "pytest" else "import unittest"
@@ -136,7 +136,7 @@ def generate_tests_python(source_code: str, filename: str, framework: str = "pyt
     # Testes gerados aqui
     ```
     """
-    return generate_with_retry(prompt, "gemini-1.5-flash")
+    return generate_with_retry(prompt, "gemini-3.7-flash")
 
 def extract_code(text: str) -> str:
     pattern = r"```(?:\w+)?\n(.*?)```"
