@@ -19,7 +19,7 @@ if not API_KEY:
     sys.exit(1)
 
 genai.configure(api_key=API_KEY)
-MODEL = genai.GenerativeModel('gemini-1.5-flash')
+MODEL = genai.GenerativeModel('gemini-3.8-flash')
 
 def detect_language(filepath: str) -> str:
     """Detecta a linguagem baseado na extensão do arquivo"""
