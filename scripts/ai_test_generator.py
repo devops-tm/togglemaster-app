@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 AI Test Generator usando Google Gemini
-Gera testes unitários para Go ou Python.
+Gera testes unitários auto-suficientes para Go ou Python.
 """
 
 import os
@@ -12,10 +12,6 @@ import re
 import time
 from pathlib import Path
 from typing import Optional
-
-# ============================================================
-# CONFIGURAÇÃO DA API - Usando a nova SDK recomendada
-# ============================================================
 
 API_KEY = os.getenv("GEMINI_API_KEY")
 if not API_KEY:
@@ -29,16 +25,14 @@ try:
     USE_NEW_API = True
     print("Usando API google.genai (recomendada)")
 except ImportError:
-    # Fallback para a API antiga (atenção: será descontinuada)
     import google.generativeai as genai
     genai.configure(api_key=API_KEY)
     USE_NEW_API = False
-    print("Usando API google.generativeai (fallback - considere migrar)")
+    print("Usando API google.generativeai (fallback)")
 
-def generate_with_retry(prompt: str, model_name: str = "gemini-3.8-flash", max_retries: int = 3) -> Optional[str]:
+def generate_with_retry(prompt: str, model_name: str = "gemini-3.8-flash", max_retries: int = 5) -> Optional[str]:
     """
-    Gera conteúdo com retry automático em caso de erro 500.
-    Usa gemini-3.8-flash por ser mais estável que o pro.
+    Gera conteúdo com retry automático para erros 503 (sobrecarga) e 500.
     """
     for attempt in range(max_retries):
         try:
@@ -50,33 +44,26 @@ def generate_with_retry(prompt: str, model_name: str = "gemini-3.8-flash", max_r
                 )
                 return response.text
             else:
-                # API antiga: google.generativeai
                 model = genai.GenerativeModel(model_name)
                 response = model.generate_content(prompt)
                 return response.text
-                
         except Exception as e:
             error_msg = str(e)
-            # Verifica se é um erro 500 (Internal Error)
-            if "500" in error_msg or "INTERNAL" in error_msg:
-                print(f"⚠️ Tentativa {attempt + 1}/{max_retries} falhou com erro 500. Aguardando {2 ** attempt} segundos...")
-                time.sleep(2 ** attempt)  # Backoff exponencial: 1s, 2s, 4s
+            # Erros de sobrecarga ou indisponibilidade
+            if "503" in error_msg or "UNAVAILABLE" in error_msg or "500" in error_msg:
+                wait_time = 2 ** attempt  # backoff exponencial: 1,2,4,8,16
+                print(f"⚠️ Tentativa {attempt+1}/{max_retries} falhou: {error_msg}")
+                print(f"   Aguardando {wait_time}s antes de tentar novamente...")
+                time.sleep(wait_time)
             else:
-                # Outro tipo de erro, não tenta novamente
                 print(f"❌ Erro não recuperável: {e}")
                 return None
-    
-    print("❌ Todas as tentativas falharam com erro 500.")
+    print("❌ Todas as tentativas falharam.")
     return None
 
 def detect_language(filepath: str) -> str:
     ext = Path(filepath).suffix.lower()
-    if ext == '.go':
-        return 'go'
-    elif ext == '.py':
-        return 'python'
-    else:
-        return 'unknown'
+    return 'go' if ext == '.go' else 'python' if ext == '.py' else 'unknown'
 
 def read_file(filepath: str) -> str:
     with open(filepath, 'r', encoding='utf-8') as f:
@@ -86,8 +73,8 @@ def generate_tests_go(source_code: str, filename: str) -> Optional[str]:
     prompt = f"""
     Você é um engenheiro de QA especialista em Go. Gere testes unitários COMPLETOS E AUTO-SUFICIENTES para o seguinte código.
 
-    IMPORTANTE: Os testes devem ser executáveis isoladamente, sem depender do código original.
-    Use apenas a biblioteca padrão do Go (testing).
+    IMPORTANTE: Os testes devem ser executáveis ISOLADAMENTE, sem depender do código original.
+    Use apenas a biblioteca padrão do Go (testing). NÃO use testify ou outros frameworks externos.
 
     Arquivo: {filename}
 
@@ -97,40 +84,41 @@ def generate_tests_go(source_code: str, filename: str) -> Optional[str]:
     ```
 
     Requisitos:
-    1. Use apenas o pacote "testing" (sem dependências externas como testify)
+    1. Use APENAS o pacote "testing"
     2. Não importe pacotes do projeto original
-    3. Use funções auxiliares dentro do próprio arquivo de teste
-    4. Cubra os principais cenários: sucesso, erro, borda
+    3. Crie funções auxiliares (mocks) dentro do próprio arquivo de teste
+    4. Cubra cenários: sucesso, erro, borda
     5. Gere APENAS o código dos testes, sem explicações
 
-    Formato de saída:
+    Formato de saída (exemplo):
     ```go
     package main
 
     import "testing"
 
-    // Funções auxiliares (mocks/stubs) dentro do arquivo de teste
+    // Funções auxiliares (mocks) internas
     func mockConnectDB() string {{
         return "mock-db-string"
     }}
 
-    func TestXxx(t *testing.T) {{
-        // Implementação do teste
+    func TestSomething(t *testing.T) {{
+        result := mockConnectDB()
+        expected := "mock-db-string"
         if result != expected {{
             t.Errorf("expected %v, got %v", expected, result)
         }}
     }}
     ```
     """
-    return generate_with_retry(prompt, "gemini-3.7-flash")
+    return generate_with_retry(prompt, "gemini-3.8-flash")
 
 def generate_tests_python(source_code: str, filename: str, framework: str = "pytest") -> Optional[str]:
     test_import = "import pytest" if framework == "pytest" else "import unittest"
     prompt = f"""
     Você é um engenheiro de QA especialista em Python. Gere testes unitários AUTO-SUFICIENTES para o seguinte código.
 
-    IMPORTANTE: Os testes devem ser executáveis isoladamente, sem depender do código original.
-    Não importe módulos do projeto original. Use mocks/stubs internos.
+    IMPORTANTE: Os testes devem ser executáveis ISOLADAMENTE, sem depender do código original.
+    Não importe módulos do projeto. Use mocks/stubs internos.
 
     Arquivo: {filename}
 
@@ -142,23 +130,22 @@ def generate_tests_python(source_code: str, filename: str, framework: str = "pyt
     Requisitos:
     1. Use {framework}
     2. Não dependa de código externo
-    3. Defina funções auxiliares dentro do próprio arquivo de teste
+    3. Defina funções auxiliares (mocks) dentro do próprio arquivo
     4. Cubra cenários de sucesso e erro
     5. Gere APENAS o código dos testes
 
     Formato de saída:
     ```python
     {test_import}
-    # Funções auxiliares (mocks) internas
+    # Funções auxiliares (mocks)
     def mock_db():
         return "mock-db"
 
     def test_xxx():
-        # Implementação com mocks
-        pass
+        assert mock_db() == "mock-db"
     ```
     """
-    return generate_with_retry(prompt, "gemini-3.7-flash")
+    return generate_with_retry(prompt, "gemini-3.8-flash")
 
 def extract_code(text: str) -> str:
     pattern = r"```(?:\w+)?\n(.*?)```"
@@ -171,7 +158,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('source', help="Arquivo fonte")
     parser.add_argument('--lang', choices=['go', 'python', 'auto'], default='auto')
-    parser.add_argument('-o', '--output', help="Arquivo de saída")
+    parser.add_argument('-o', '--output', help="Arquivo de saída (sem extensão)")
     parser.add_argument('-f', '--framework', default='pytest', choices=['pytest', 'unittest'])
     args = parser.parse_args()
 
@@ -184,10 +171,8 @@ def main():
         print("ERRO: Arquivo vazio")
         sys.exit(1)
 
-    lang = args.lang
-    if lang == 'auto':
-        lang = detect_language(args.source)
-        print(f"Linguagem detectada: {lang}")
+    lang = args.lang if args.lang != 'auto' else detect_language(args.source)
+    print(f"Linguagem detectada: {lang}")
 
     if lang == 'go':
         response = generate_tests_go(source_code, args.source)
@@ -208,12 +193,7 @@ def main():
         print("❌ Não foi possível extrair o código")
         sys.exit(1)
 
-    if args.output:
-        output_file = args.output + ext
-    else:
-        base = Path(args.source).stem
-        output_file = f"tests/test_{base}{ext}"
-
+    output_file = args.output + ext if args.output else f"tests/test_{Path(args.source).stem}{ext}"
     Path(output_file).parent.mkdir(parents=True, exist_ok=True)
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(test_code)
