@@ -129,38 +129,47 @@ jobs:
           # Detecta linguagem automaticamente e gera testes
           python scripts/ai_test_generator.py "$MAIN_FILE" -o "tests/test_${{ matrix.service }}_generated"
 
-      - name: Run generated tests (auto-detect)
+      - name: Run generated tests (Go with source)
+        if: matrix.service != 'analytics'
         run: |
-          echo "🔍 Procurando arquivos de teste gerados..."
-          ls -la tests/ || echo "Diretório tests vazio"
+          TEST_FILE="tests/test_${{ matrix.service }}_generated.go"
+          SERVICE_PATH="src/${{ matrix.service }}-service"
           
-          # Procura por qualquer arquivo de teste gerado (Go ou Python)
-          TEST_FILE=$(find tests/ -name "test_${{ matrix.service }}_generated.*" | head -1)
-          
-          if [ -z "$TEST_FILE" ]; then
-            echo "⚠️ Nenhum teste gerado para o serviço ${{ matrix.service }}"
-            exit 0
-          fi
-          
-          EXT="${TEST_FILE##*.}"
-          echo "📄 Arquivo encontrado: $TEST_FILE (extensão: $EXT)"
-          
-          if [ "$EXT" == "go" ]; then
-            echo "📦 Executando testes Go..."
+          if [ -f "$TEST_FILE" ]; then
+            echo "📦 Executando testes Go com o código fonte..."
             mkdir -p /tmp/go-test-run
-            cp "$TEST_FILE" /tmp/go-test-run/
-            cd /tmp/go-test-run
-            go mod init test
+            cp -r "$SERVICE_PATH" /tmp/go-test-run/
+            cp "$TEST_FILE" /tmp/go-test-run/$(basename "$SERVICE_PATH")/
+            cd /tmp/go-test-run/$(basename "$SERVICE_PATH")
+            
+            if [ ! -f "go.mod" ]; then
+              go mod init test
+            fi
             go mod tidy
             go test -v ./... || echo "⚠️ Testes falharam (gerados por IA)"
             cd -
-          elif [ "$EXT" == "py" ]; then
-            echo "🐍 Executando testes Python..."
+          else
+            echo "Nenhum teste gerado para o serviço ${{ matrix.service }}"
+          fi
+
+      - name: Run generated tests (Python with source)
+        if: matrix.service == 'analytics'
+        run: |
+          TEST_FILE="tests/test_${{ matrix.service }}_generated.py"
+          SERVICE_PATH="src/${{ matrix.service }}-service"
+          
+          if [ -f "$TEST_FILE" ]; then
+            echo "🐍 Executando testes Python com o código fonte..."
+            mkdir -p /tmp/py-test-run
+            cp -r "$SERVICE_PATH" /tmp/py-test-run/
+            cp "$TEST_FILE" /tmp/py-test-run/$(basename "$SERVICE_PATH")/
+            cd /tmp/py-test-run/$(basename "$SERVICE_PATH")
+            
             pip install pytest pytest-cov
             pytest "$TEST_FILE" -v --tb=short || echo "⚠️ Testes falharam (gerados por IA)"
+            cd -
           else
-            echo "⚠️ Extensão não suportada: $EXT"
-            exit 1
+            echo "Nenhum teste gerado para o serviço ${{ matrix.service }}"
           fi
 
       - name: Upload generated tests artifact
