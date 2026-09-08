@@ -7,7 +7,7 @@ Sua única função é:
 2.  Consumir as mensagens de evento da fila.
 3.  Gravar os dados de análise em uma tabela do **AWS DynamoDB**.
 
-## 📦 Pré-requisitos (Local)
+## Pré-requisitos (Local)
 
 * [Python](https://www.python.org/) (versão 3.9 ou superior)
 * **Credenciais da AWS:** Este serviço **DEVE** ter credenciais da AWS para acessar SQS e DynamoDB. Configure-as em seu terminal (via `aws configure`) ou defina as variáveis de ambiente:

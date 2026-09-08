@@ -10,7 +10,7 @@ Este é o serviço de regras de segmentação (targeting) do projeto ToggleMaste
 * [PostgreSQL](https://www.postgresql.org/download/)
 * O `auth-service` deve estar rodando.
 
-## 🚀 Rodando Localmente
+## Rodando Localmente
 
 1.  **Clone o repositório** e entre na pasta `targeting-service`.
 
