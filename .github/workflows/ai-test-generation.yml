@@ -82,38 +82,83 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
+      - name: Setup Go (para serviços Go)
+        if: matrix.service != 'analytics'  # analytics é Python
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
       - name: Install dependencies
         run: |
           pip install google-generativeai
 
-      - name: Generate tests with Gemini
+      - name: Find main file and generate tests
+        id: generate
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           SERVICE_PATH="src/${{ matrix.service }}-service"
-          # Procura por app.py, main.py ou qualquer arquivo .py na raiz do serviço
-          MAIN_FILE="$SERVICE_PATH/app.py"
-          if [ ! -f "$MAIN_FILE" ]; then
-            MAIN_FILE=$(find "$SERVICE_PATH" -maxdepth 1 -name "*.py" ! -name "__init__.py" | head -1)
+          
+          # Procura por arquivos principais
+          MAIN_FILE=""
+          # Go: procura por main.go ou arquivos .go na raiz (exceto *_test.go)
+          if [ -d "$SERVICE_PATH" ]; then
+            MAIN_FILE=$(find "$SERVICE_PATH" -maxdepth 2 -type f -name "main.go" -o -name "app.go" | head -1)
+            if [ -z "$MAIN_FILE" ]; then
+              MAIN_FILE=$(find "$SERVICE_PATH" -type f -name "*.go" ! -name "*_test.go" | head -1)
+            fi
           fi
+          
+          # Python: procura por app.py ou main.py
           if [ -z "$MAIN_FILE" ]; then
-            echo "ERROR: Nenhum arquivo Python encontrado em $SERVICE_PATH"
+            MAIN_FILE=$(find "$SERVICE_PATH" -type f -name "app.py" -o -name "main.py" | head -1)
+            if [ -z "$MAIN_FILE" ]; then
+              MAIN_FILE=$(find "$SERVICE_PATH" -type f -name "*.py" ! -name "__init__.py" ! -name "test_*.py" | head -1)
+            fi
+          fi
+          
+          if [ -z "$MAIN_FILE" ]; then
+            echo "ERROR: Nenhum arquivo fonte encontrado em $SERVICE_PATH"
+            find "$SERVICE_PATH" -type f \( -name "*.go" -o -name "*.py" \) | head -10
             exit 1
           fi
+          
+          echo "main_file=$MAIN_FILE" >> $GITHUB_OUTPUT
           echo "📄 Gerando testes para $MAIN_FILE"
-          python scripts/ai_test_generator.py "$MAIN_FILE" -o "tests/test_${{ matrix.service }}_generated.py"
+          
+          # Detecta linguagem automaticamente
+          python scripts/ai_test_generator.py "$MAIN_FILE" -o "tests/test_${{ matrix.service }}_generated"
 
-      - name: Install test dependencies
+      - name: Install test dependencies (Python)
+        if: matrix.service == 'analytics'
         run: |
           pip install pytest pytest-cov
 
-      - name: Run generated tests
+      - name: Install test dependencies (Go)
+        if: matrix.service != 'analytics'
         run: |
-          TEST_FILE="tests/test_${{ matrix.service }}_generated.py"
-          if [ -f "$TEST_FILE" ]; then
-            pytest "$TEST_FILE" -v --tb=short --cov=src.${{ matrix.service }}-service --cov-report=term || echo "⚠️ Testes falharam (gerados por IA)"
+          go mod download || true
+          go install github.com/stretchr/testify/assert@latest
+
+      - name: Run generated tests
+        id: run-tests
+        continue-on-error: true
+        run: |
+          TEST_FILE="tests/test_${{ matrix.service }}_generated"
+          if [ "${{ matrix.service }}" == "analytics" ]; then
+            # Python
+            if [ -f "${TEST_FILE}.py" ]; then
+              pytest "${TEST_FILE}.py" -v --tb=short || echo "⚠️ Testes falharam"
+            else
+              echo "Nenhum teste gerado"
+            fi
           else
-            echo "Nenhum teste gerado para o serviço ${{ matrix.service }}"
+            # Go
+            if [ -f "${TEST_FILE}.go" ]; then
+              go test -v "${TEST_FILE}.go" || echo "⚠️ Testes falharam"
+            else
+              echo "Nenhum teste gerado"
+            fi
           fi
 
       - name: Upload generated tests artifact
@@ -121,7 +166,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tests-${{ matrix.service }}
-          path: tests/test_${{ matrix.service }}_generated.py
+          path: tests/test_${{ matrix.service }}_generated.*
 
   comment-pr:
     name: Comment PR with results
@@ -147,10 +192,11 @@ jobs:
           else
             COMMENT+="**Serviços modificados:** $SERVICES\n\n"
             for service in $(echo "$SERVICES" | jq -r '.[]'); do
-              TEST_FILE="artifacts/tests-${service}/test_${service}_generated.py"
+              TEST_FILE=$(find artifacts/tests-${service} -type f 2>/dev/null | head -1)
               if [ -f "$TEST_FILE" ]; then
                 LINES=$(wc -l < "$TEST_FILE")
-                COMMENT+="- **${service}**: ✅ Testes gerados (${LINES} linhas)\n"
+                EXT=${TEST_FILE##*.}
+                COMMENT+="- **${service}** (${EXT}): ✅ Testes gerados (${LINES} linhas)\n"
               else
                 COMMENT+="- **${service}**: ❌ Nenhum teste gerado\n"
               fi
