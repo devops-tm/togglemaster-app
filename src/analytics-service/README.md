@@ -16,7 +16,7 @@ Sua única função é:
     * `AWS_SESSION_TOKEN` (se estiver usando o AWS Academy)
 * **Recursos da AWS:** Você precisa ter criado a Fila SQS e a Tabela DynamoDB no console.
 
-## 🚀 Preparando o DynamoDB
+##  Preparando o DynamoDB
 
 Este serviço espera que uma tabela específica exista no DynamoDB.
 
