@@ -20,7 +20,6 @@ module "rds" {
   source = "../../../modules/rds"
 
   databases = var.databases
-  # NÃO passe eks_security_group_id aqui
 }
 
 module "elasticache" {
