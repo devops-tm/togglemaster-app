@@ -22,11 +22,18 @@ resource "aws_security_group" "postgres" {
   description = "Security Group do banco ${each.key}"
   vpc_id      = data.aws_vpc.default.id
 
-  ingress {
+   ingress {
     from_port   = 5432
     to_port     = 5432
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [var.eks_security_group_id]
   }
 
   egress {

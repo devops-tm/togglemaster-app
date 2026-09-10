@@ -24,3 +24,9 @@ variable "backup_retention_period" {
   type        = number
   default     = 0
 }
+
+variable "eks_security_group_id" {
+  description = "Security Group do cluster EKS"
+  type        = string
+  default     = ""
+}

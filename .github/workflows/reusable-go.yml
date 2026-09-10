@@ -73,10 +73,19 @@ jobs:
           go-version: ${{ inputs.go-version }}
 
       - name: Run Govulncheck (SCA)
+        working-directory: ${{ inputs.service-path }}
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
-          cd ${{ inputs.service-path }}
-          govulncheck ./... || true
+          # Gera o relatório em JSON
+          govulncheck -json ./... > /tmp/govulncheck.json || true
+          # Filtra apenas vulnerabilidades críticas (usando a base do OSV)
+          CRITICAL=$(jq '[.vulns[] | select(.severity != null) | select(.severity[]?.score >= 9.0)] | length' /tmp/govulncheck.json 2>/dev/null || echo 0)
+          if [ "$CRITICAL" -gt 0 ]; then
+            echo "❌ Encontradas $CRITICAL vulnerabilidades CRITICAL"
+            jq -r '.vulns[] | select(.severity != null) | select(.severity[]?.score >= 9.0) | .id' /tmp/govulncheck.json
+            exit 1
+          fi
+          echo "✅ Nenhuma vulnerabilidade crítica encontrada"
 
       - name: Run Trivy vulnerability scanner in fs mode
         uses: aquasecurity/trivy-action@master

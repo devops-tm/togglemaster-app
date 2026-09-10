@@ -42,6 +42,23 @@ jobs:
             -backend-config="key=prod/compute/terraform.tfstate" \
             -backend-config="region=$AWS_REGION" \
             -reconfigure
+            
+      - name: Cleanup LoadBalancer Services
+        working-directory: terraform/environments/prod/compute
+        run: |
+          echo "Configurando kubeconfig..."
+          aws eks update-kubeconfig --region $AWS_REGION --name togglemaster-eks
+
+          echo "Deletando serviços LoadBalancer..."
+          kubectl delete svc ingress-nginx-controller -n ingress-nginx --ignore-not-found
+          kubectl delete svc argocd-server -n argocd --ignore-not-found
+
+          echo "Aguardando remoção dos ELBs..."
+          sleep 60
+
+      - name: Terraform Destroy (Compute)
+        working-directory: terraform/environments/prod/compute
+        run: terraform destroy -var-file="terraform.tfvars" -auto-approve
       - name: Terraform Destroy
         working-directory: terraform/environments/prod/compute
         run: |
