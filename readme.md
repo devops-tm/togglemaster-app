@@ -162,7 +162,6 @@ togglemaster-app/
 │   │   └── networking/               # Security Groups
 │   └── modules/                      # Módulos reutilizáveis
 │
-├── scripts/                          # Scripts auxiliares
 ├── docs/                             # Documentação
 └── README.md
 ```
