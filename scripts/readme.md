@@ -2,7 +2,6 @@
 
 <div align="center">
 
-![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/devops-tm/togglemaster-app/ai-test-generation.yml?branch=main&label=Test%20Generation&style=for-the-badge)
 [![Made with Gemini](https://img.shields.io/badge/Made%20with-Gemini-8A2BE2?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
 [![Go version](https://img.shields.io/badge/Go-1.24-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev/)
 [![Python version](https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org/)
