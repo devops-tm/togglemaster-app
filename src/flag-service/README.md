@@ -10,7 +10,7 @@ Este é o serviço de CRUD (Create, Read, Update, Delete) do projeto ToggleMaste
 * [PostgreSQL](https://www.postgresql.org/download/) (rodando localmente ou em um contêiner Docker)
 * O `auth-service` deve estar rodando (localmente na porta `8001`).
 
-## 🚀 Rodando Localmente
+## Rodando Localmente
 
 1.  **Clone o repositório** e entre na pasta `flag-service`.
 
