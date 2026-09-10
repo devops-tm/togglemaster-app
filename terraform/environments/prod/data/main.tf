@@ -20,18 +20,9 @@ module "rds" {
   source = "../../../modules/rds"
 
   databases = var.databases
-  eks_security_group_id = data.terraform_remote_state.compute.outputs.cluster_primary_security_group_id
+  # NÃO passe eks_security_group_id aqui
 }
 
 module "elasticache" {
   source = "../../../modules/elasticache"
-}
-
-data "terraform_remote_state" "compute" {
-  backend = "s3"
-  config = {
-    bucket = var.terraform_state_bucket
-    key    = "prod/compute/terraform.tfstate"
-    region = var.aws_region
-  }
 }
