@@ -37,7 +37,7 @@ aws dynamodb create-table \
 ```
 (Nota: O throughput provisionado acima é o mínimo possível, ideal para o free tier/testes).
 
-## 🚀 Rodando Localmente
+## Rodando Localmente
 **1. Clone o repositório** e entre na pasta `analytics-service`.
 
 **2. Configure as Variáveis de Ambiente:** Crie um arquivo chamado `.env` na raiz desta pasta (`analytics-service/`) com o seguinte conteúdo. **Garanta que suas credenciais da AWS também estejam configuradas no seu ambiente.**
