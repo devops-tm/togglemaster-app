@@ -45,7 +45,7 @@ Este é o serviço de CRUD (Create, Read, Update, Delete) do projeto ToggleMaste
     ```
     O servidor estará rodando em `http://localhost:8002`.
 
-## 🧪 Testando os Endpoints
+## Testando os Endpoints
 
 **Primeiro, você precisa de uma chave de API válida!**
 

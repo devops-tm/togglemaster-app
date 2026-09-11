@@ -71,7 +71,7 @@ Ele funciona da seguinte forma:
     ```
     O servidor estará rodando em `http://localhost:8004`.
 
-## 🧪 Testando os Endpoints
+## Testando os Endpoints
 
 Para os testes, vamos assumir que você já criou:
 1.  Uma flag chamada `enable-new-dashboard` no `flag-service`.
